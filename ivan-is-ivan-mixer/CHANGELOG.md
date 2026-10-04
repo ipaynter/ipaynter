@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v2.5.1 — 2026-10-04 — Fix: dragging links in
-Commit: `e5cb49a`
+Commit: `c8e9fdf`
 - **Fixed:** dragging a YouTube link onto the mixer did nothing. The deck videos (embedded YouTube pages) swallowed the drop, and other areas weren't drop targets.
 - While you drag a link, a drop screen now appears with three big boxes: **Deck A · Queue · Deck B**. Dropping anywhere on it works, and Chrome no longer opens the link instead.
 - The videos no longer catch the mouse. The mixer controls them, so nothing is lost.
