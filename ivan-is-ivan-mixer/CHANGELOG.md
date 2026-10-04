@@ -18,6 +18,11 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.2.2 — 2026-10-04 — Your icon
+Commit: `pending`
+- The desktop button now shows the **Ivan "i" icon** (`ivan-mixer.ico`). The button is refreshed on every click, so an existing button picks up the new icon.
+- The mixer and Viewer tabs show the same icon in Chrome.
+
 ## v3.2.1 — 2026-10-04 — Fix: old version kept showing
 Commit: `ead7ac9`
 - **Fixed:** if an older mixer was still running (an old black window, for example v2.5.2), starting the new one just opened the old one. Now the new version closes the old one by itself and starts. A second click on the same version still just opens it.

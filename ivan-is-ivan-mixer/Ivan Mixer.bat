@@ -65,22 +65,11 @@ if /i not "%~dp0"=="%APP%\" copy /y "%~f0" "%APP%\Ivan Mixer.bat" >nul 2>nul
 
 rem --- desktop button (made once; points at the installed copy of this file)
 call :make_shortcut
-
-echo   Starting the mixer...
-echo.
-cd /d "%APP%"
-call "%APP%\start-windows.bat"
-exit /b
-
-:unzip_ps
-rem fallback if this Windows has no tar.exe
-call powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath $env:ZIP -DestinationPath $env:TMPX -Force" >nul 2>nul
-exit /b
-
-:make_shortcut
-if exist "%APP%\desktop-button-made.txt" exit /b
-call powershell -NoProfile -ExecutionPolicy Bypass -Command "$d=[Environment]::GetFolderPath('Desktop'); $s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Ivan is Ivan Mixer.lnk')); $s.TargetPath=(Join-Path $env:APP 'Ivan Mixer.bat'); $s.WorkingDirectory=$env:APP; $s.IconLocation=\"$env:SystemRoot\System32\SndVol.exe,0\"; $s.Description='Install the newest download and start the Ivan is Ivan mixer'; $s.Save()" >nul 2>nul
-if not errorlevel 1 (
+rem made (or refreshed) every start, so it always points here and shows the Ivan icon
+set "ICON=%SystemRoot%\System32\SndVol.exe,0"
+if exist "%APP%\ivan-mixer.ico" set "ICON=%APP%\ivan-mixer.ico,0"
+call powershell -NoProfile -ExecutionPolicy Bypass -Command "$d=[Environment]::GetFolderPath('Desktop'); $s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Ivan is Ivan Mixer.lnk')); $s.TargetPath=(Join-Path $env:APP 'Ivan Mixer.bat'); $s.WorkingDirectory=$env:APP; $s.IconLocation=$env:ICON; $s.Description='Install the newest download and start the Ivan is Ivan mixer'; $s.Save()" >nul 2>nul
+if not errorlevel 1 if not exist "%APP%\desktop-button-made.txt" (
   > "%APP%\desktop-button-made.txt" echo made
   echo   Desktop button "Ivan is Ivan Mixer" created.
 )
