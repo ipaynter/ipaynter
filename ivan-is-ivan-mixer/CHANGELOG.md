@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v2.6.1 — 2026-10-04 — Re-check blocked songs
-Commit: see the commit titled *“v2.6.1: re-check blocked songs”*
+Commit: `a4a9ce7`
 - **↻ Re-check ⚠ songs** in the Library tests every marked song again and clears the ⚠ on the ones that now play, for example after the owner switched on *Allow embedding*.
 - A ↻ button on each marked song re-checks just that one.
 - A marked song that plays successfully on a deck clears its own ⚠, and Smart DJ can pick it again.
