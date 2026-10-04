@@ -2,7 +2,7 @@
 # Serves the mixer on http://localhost:8765 (this computer only) and:
 #   /api/cmd/<name>?k=<key>  Stream Deck "Website" action (GET in background)
 #   /api/poll                mixer page picks up pending commands
-#   /api/info                mixer page reads the control key
+#   /api/info                mixer page reads the control key and app version
 #   /api/save  (POST)        mixer saves its data to data\mixer-data.json (+ daily copy)
 #   /api/load                mixer restores from the disk copy
 #   /api/channel?h=|c=       a creator's channel ID and profile picture
@@ -18,6 +18,10 @@ $dataDir = Join-Path $root 'data'
 $dataFile = Join-Path $dataDir 'mixer-data.json'
 $maxBody = 20MB
 $keepDaily = 30
+
+$version = 'unknown'
+$versionFile = Join-Path $root 'VERSION'
+if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
 
 $keyFile = Join-Path $root 'control-key.txt'
 if (Test-Path $keyFile) {
@@ -69,7 +73,7 @@ try { $listener.Start() } catch {
     exit 1
 }
 
-Write-Host "Ivan is Ivan - Live Mixer running at http://localhost:$port/" -ForegroundColor Cyan
+Write-Host "Ivan is Ivan - Live Mixer v$version running at http://localhost:$port/" -ForegroundColor Cyan
 Write-Host 'Keep this window open during the show. Close it to stop the mixer.'
 try { Start-Process "http://localhost:$port/" } catch { Write-Host "Open http://localhost:$port/ in Chrome." }
 
@@ -101,7 +105,7 @@ try {
                 Send-Json $res '{"ok":true}'; continue
             }
 
-            if ($path -eq '/api/info') { Send-Json $res ('{"key":"' + $key + '"}'); continue }
+            if ($path -eq '/api/info') { Send-Json $res ('{"key":"' + $key + '","version":"' + $version + '"}'); continue }
             if ($path -eq '/api/poll') {
                 $items = @($pending | ForEach-Object { '"' + $_ + '"' })
                 $pending.Clear()

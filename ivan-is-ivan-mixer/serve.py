@@ -4,7 +4,7 @@
 Serves the mixer on http://localhost:8765 (this computer only) and:
   /api/cmd/<name>?k=<key>  Stream Deck "Website" action (GET in background)
   /api/poll                mixer page picks up pending commands
-  /api/info                mixer page reads the control key
+  /api/info                mixer page reads the control key and app version
   /api/save  (POST)        mixer saves its data to data/mixer-data.json (+ daily copy)
   /api/load                mixer restores from the disk copy
   /api/channel?h=|c=       a creator's channel ID and profile picture
@@ -27,6 +27,11 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(ROOT, "data")
 DATA_FILE = os.path.join(DATA_DIR, "mixer-data.json")
 KEY_FILE = os.path.join(ROOT, "control-key.txt")
+try:
+    with open(os.path.join(ROOT, "VERSION")) as f:
+        VERSION = f.read().strip()
+except OSError:
+    VERSION = "unknown"
 MAX_BODY = 20 * 1024 * 1024
 KEEP_DAILY = 30
 
@@ -118,7 +123,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         q = parse_qs(url.query)
 
         if path == "/api/info":
-            return self.send_json({"key": KEY})
+            return self.send_json({"key": KEY, "version": VERSION})
         if path == "/api/poll":
             with lock:
                 cmds = pending[:]
@@ -181,7 +186,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 def main():
     server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     url = f"http://localhost:{PORT}/"
-    print(f"Ivan is Ivan - Live Mixer running at {url}")
+    print(f"Ivan is Ivan - Live Mixer v{VERSION} running at {url}")
     print("Keep this window open during the show. Press Ctrl+C to stop.")
     threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:

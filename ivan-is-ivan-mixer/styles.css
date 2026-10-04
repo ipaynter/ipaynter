@@ -539,3 +539,7 @@ body.staged .stage-ctrl { display: flex; }
 .imp-list td input:not([type=checkbox]), .imp-list td select { width: 100%; padding: 4px 6px; }
 .imp-list tr.dupe { opacity: .45; }
 .imp-list .link { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+
+/* version label */
+.ver { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--dim); border: 1px solid var(--line); border-radius: 9px; padding: 1px 6px; margin-left: 4px; font-weight: 400; }
+.ver-splash { font-family: var(--mono); color: var(--dim); margin: -18px 0 22px; letter-spacing: 2px; }

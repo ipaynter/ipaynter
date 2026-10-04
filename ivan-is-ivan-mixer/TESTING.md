@@ -1,5 +1,7 @@
 # Verification test — Ivan is Ivan Live Mixer
 
+Version tested: v________ (from the top bar)
+
 Work top to bottom and tick each box. If something fails, stop, take a screenshot and note the step number.
 Time needed: about 45 minutes. Use real songs from your writers, wear headphones, and use a **private** StreamYard broadcast.
 
@@ -22,6 +24,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 1.2 Click **POWER ON**. The quick-start guide appears. Close it.
 - [ ] 1.3 The top right shows **YouTube: ready**, **Stream Deck: ready** and **Disk: saved ✓** in green.
 - [ ] 1.4 Hover over any button. A help box appears after a moment.
+- [ ] 1.5 The top bar shows the version (for example **v2.5.0**). It matches the zip file name and **Settings → About this version**.
 
 ## 2. Writers
 

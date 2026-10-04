@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=2.5.0">
 </head>
 <body>
 
@@ -13,6 +13,7 @@
   <div class="splash-inner">
     <div class="logo-big">IVAN <em>is</em> IVAN</div>
     <div class="logo-sub">LIVE MIXER</div>
+    <div class="ver-splash" data-ver></div>
     <button id="power" class="power" type="button">⏻ POWER ON</button>
     <p class="hint">One click wakes up the audio. Approved music only.</p>
     <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Close it and start the mixer with <b>start-windows.bat</b> (or <b>start-mac-linux.sh</b>).</p>
@@ -20,7 +21,7 @@
 </div>
 
 <header class="topbar">
-  <div class="brand"><span class="brand-dot"></span>IVAN <em>is</em> IVAN <small>LIVE MIXER</small></div>
+  <div class="brand"><span class="brand-dot"></span>IVAN <em>is</em> IVAN <small>LIVE MIXER</small> <span class="ver" data-ver title="App version. See CHANGELOG.md for what changed in each version."></span></div>
   <div class="top-center">
     <button id="onair" class="onair" type="button" data-cmd="onair" title="Starts the show timer and arms the dead-air alarm. Press it when you go live in StreamYard.">ON AIR</button>
     <div class="clock-box" title="How long you have been on air"><label>SHOW</label><span id="showTimer">0:00:00</span></div>
@@ -244,6 +245,11 @@
         <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play tracks in the library)</label>
       </div>
       <div class="card">
+        <h3>About this version</h3>
+        <p id="aboutVer" class="dim"></p>
+        <p class="dim">What changed in each version is listed in <code>CHANGELOG.md</code> in the app folder. Backups record the version that made them.</p>
+      </div>
+      <div class="card">
         <h3>Backup</h3>
         <p class="dim">Saved in Chrome <b>and</b> automatically to the <code>data</code> folder next to the app (with a daily copy). Nothing is sent anywhere except YouTube.</p>
         <button type="button" id="exportBtn" class="primary">Export backup (.json)</button>
@@ -387,7 +393,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js"></script>
+<script src="app.js?v=2.5.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

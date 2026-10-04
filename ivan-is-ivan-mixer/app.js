@@ -5,6 +5,10 @@
 'use strict';
 
 // Privacy-enhanced YouTube host for the players.
+// Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
+const APP_VERSION = '2.5.0';
+const DATA_VERSION = 2;
+
 const YT_HOST = 'https://www.youtube-nocookie.com';
 const DEFAULT_COLORS = ['#22d3ee', '#ff7a3d', '#a78bfa', '#2ee59d', '#ffd23f', '#f472b6'];
 
@@ -31,6 +35,19 @@ function fmt(sec) {
 function fmtClock(sec) {
   sec = Math.max(0, Math.floor(sec));
   return Math.floor(sec / 3600) + ':' + String(Math.floor((sec % 3600) / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+}
+
+// true when version a (e.g. "2.10.0") is newer than b ("2.9.1")
+function newerVersion(a, b) {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0); }
+  return false;
+}
+
+function renderVersion() {
+  $$('[data-ver]').forEach(e => { e.textContent = 'v' + APP_VERSION; });
+  const about = $('#aboutVer');
+  if (about) about.innerHTML = `App <b>v${APP_VERSION}</b> · data format <b>${DATA_VERSION}</b> · server <b>${S.serverVersion ? 'v' + esc(S.serverVersion) : 'not running'}</b>`;
 }
 
 function ago(ts) {
@@ -107,7 +124,7 @@ const Disk = {
   ok: false, key: null, timer: null,
   schedule() { if (!this.ok) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 1500); },
   snapshot() {
-    const o = { app: 'ivan-is-ivan-mixer', version: 2, savedAt: new Date().toISOString() };
+    const o = { app: 'ivan-is-ivan-mixer', version: DATA_VERSION, appVersion: APP_VERSION, savedAt: new Date().toISOString() };
     Object.keys(KEYS).forEach(k => { o[k] = S[k]; });
     return o;
   },
@@ -131,7 +148,8 @@ const Disk = {
         else if (Array.isArray(d[k])) S[k] = d[k];
         save[k]();
       });
-      toast(`Restored ${S.library.length} tracks from the disk copy`, 'good');
+      toast(`Restored ${S.library.length} tracks from the disk copy (saved by v${d.appVersion || '2.4 or older'})`, 'good');
+      if (d.appVersion && newerVersion(d.appVersion, APP_VERSION)) toast(`Careful: this data was saved by a newer mixer (v${d.appVersion}). You are running v${APP_VERSION}.`, 'bad');
       return true;
     } catch { return false; }
   }
@@ -1308,13 +1326,18 @@ const Remote = {
     try {
       const r = await fetch('/api/info', { cache: 'no-store' });
       if (!r.ok) throw new Error();
-      this.key = (await r.json()).key;
+      const info = await r.json();
+      this.key = info.key;
       this.ok = true;
+      S.serverVersion = info.version || 'unknown';
+      if (info.version && info.version !== APP_VERSION) {
+        toast(`Version mismatch: files are v${info.version} but this page is v${APP_VERSION}. Press Ctrl+F5 to reload.`, 'bad');
+      }
     } catch { this.ok = false; }
     const pill = $('#remoteStatus');
     pill.textContent = this.ok ? 'Stream Deck: ready' : 'Stream Deck: keyboard only';
     pill.className = 'pill ' + (this.ok ? 'ok' : '');
-    renderKeys();
+    renderKeys(); renderVersion();
     if (this.ok) {
       Disk.ok = true; Disk.key = this.key;
       if (await Disk.restoreIfEmpty()) renderEverything();
@@ -2123,6 +2146,7 @@ async function importData(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.library)) throw new Error('no library in file');
+    if (data.appVersion && newerVersion(data.appVersion, APP_VERSION)) toast(`This backup was made by a newer mixer (v${data.appVersion}). Importing what this version understands.`, 'bad');
     // creators first so tracks can point at them
     const crMap = {};
     (data.creators || []).forEach(raw => {
@@ -2302,7 +2326,7 @@ function boot() {
   Tip.init();
   initMixerUI(); initQueueUI(); initSmartUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab); });
-  renderEverything(); syncXfUI(); applyVolumes();
+  renderEverything(); renderVersion(); syncXfUI(); applyVolumes();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
 
   // Look for new uploads every 30 minutes, but never while on air.

@@ -3,6 +3,8 @@
 A two-deck DJ mixer for YouTube links, built for the *Ivan is Ivan* live show on StreamYard.
 Runs on your own computer in Google Chrome. You don't need an account, you don't need to install anything on Windows, and nothing tracks you.
 
+**Version:** see the `VERSION` file, the top bar of the mixer, and `CHANGELOG.md` for what changed in each release.
+
 ## Start it
 
 | Computer | What to do |
@@ -167,3 +169,10 @@ The only outside connections are to YouTube: the players, thumbnails, title look
 - **The upload feed covers a channel's 15 most recent videos**, including non-music ones. Ignore those once and they stay gone.
 - **Run the mixer in its own Chrome window**, not a hidden background tab. Chrome slows hidden tabs down.
 - **Permission is on you.** Even with full permission, YouTube's Content ID can still flag a live stream. Keep each creator's written OK on file.
+
+## Versions and updates
+
+- The current version is shown in the top bar, and in **Settings → About this version**.
+- What changed in each version is in `CHANGELOG.md`.
+- **To update:** close the mixer and its black window, then extract the new zip **over** your app folder. Your `data` folder and `control-key.txt` stay as they are, so your library and Stream Deck buttons keep working. Start again and check that the new version number shows.
+- If the mixer says *Version mismatch*, press **Ctrl+F5** once.
