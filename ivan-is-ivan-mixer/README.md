@@ -10,83 +10,118 @@ Runs on your own computer in Google Chrome. You don't need an account, you don't
 | **Windows** | Double-click `start-windows.bat`. Chrome opens the mixer. Keep the black window open during the show. |
 | **Mac / Linux** | Run `./start-mac-linux.sh` (needs Python 3). |
 
-Then click **POWER ON**. Use the start script every time. If you double-click `index.html` directly, YouTube won't play.
+Then click **POWER ON**. Press **?** (top right) at any time for the quick-start guide, and hover over any control to see what it does and its shortcut key.
+
+Use the start script every time. If you double-click `index.html` directly, YouTube won't play and nothing is saved to disk.
 The mixer is at `http://localhost:8765`. It only answers this computer, not your network.
+
+## Daily flow
+
+1. **Creators tab:** add each creator (name, YouTube channel, color). New uploads show up on their own. Click **✓ Approve** or **Ignore**.
+2. **Library:** for any other approved link, paste it and press **Fetch info**. Add BPM and energy if you know them.
+3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
+4. **Queue:** drag songs in, or use the **Smart Next** cards.
+5. Go live in StreamYard, press **ON AIR**, then **AUTO DJ**, or mix by hand.
+6. Press **STAGE VIEW** (V). This is the clean page you share in StreamYard.
+7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
 
 ## What it does
 
 **Decks A and B**
-- Paste an approved YouTube link and press LOAD, or drag a track in from the library or queue.
-- The **TIME TO END** countdown turns yellow at 30 s and flashes red at 10 s. It also tells you whether the next song is cued, so you don't hit dead air.
-- **CUE** works like a CDJ: when paused it sets the cue point, when playing it jumps back to the cue and pauses.
-- **4 hot cues**: click to set, click again to jump. Right-click or Shift-click clears one. They're saved with the track.
-- **Loops**: IN / OUT, a quick 8-second loop, and EXIT.
-- **TRIM: START / MIX-OUT**: mark where a song really starts (skip a long intro) and where Auto DJ should leave it (skip an outro). Saved with the track.
-- Click the progress bar to jump.
+- **TIME TO END** countdown: turns yellow at 30 s and flashes red at 10 s. It also tells you whether the next song is cued, so you don't hit dead air.
+- **Beat counter:** 4 beat lights, BPM, "BAR 12.3 · 8 bars left", and a bar grid on the progress bar.
+- **TAP / GRID / ½ / ×2:** set the tempo and the downbeat, saved with the song.
+- **CUE** works like a club deck: when paused it sets the cue point, when playing it jumps back to the cue and pauses.
+- **4 hot cues:** click to set, click again to jump, right-click clears.
+- **Loops:** IN / OUT, a 4-bar instant loop (8 s if the tempo is unknown) and EXIT.
+- **TRIM: START / MIX-OUT:** skip long intros and outros. Saved with the song.
+- **Spinning record:** shows the song's thumbnail, with a top stripe in the creator's color.
 
 **Mixer**
-- A volume fader for each deck plus a master fader.
-- Crossfader with three curves: Smooth (constant power, no volume dip), Linear and Scratch cut.
-- **MIX ⇄** fades to the other deck over the FADE time, then stops the old deck.
-- **TALK** dips the music to your "Duck to" level while you speak.
-- **Voice auto-duck** listens to your mic level and dips the music while you talk. It only measures loudness and never records. Use headphones so the music doesn't trigger it.
-- **FADE ALL OUT** fades everything to silence in 2 s (Esc).
+- **Tempo match:** shows both decks' BPM and turns green when they are close enough to overlap smoothly.
+- Fader for each deck plus a master fader.
+- Crossfader with three curves: Smooth (constant power), Linear and Scratch cut.
+- **MIX ⇄** crossfades to the other deck, then stops the old one.
+- **TALK** dips the music while you speak.
+- **Voice auto-duck** does it automatically from your mic level. It never records. Wear headphones.
+- **FADE ALL OUT:** an emergency fade to silence. It's on the button and the Stream Deck only, so a stray key can't kill your music.
 
 **Auto DJ**
-- Plays the queue for you. It preloads the next song on the idle deck, starts it FADE seconds before the end (or at the MIX-OUT mark) and crossfades.
-- You can take over at any time. Touching the crossfader or pressing play/pause works as normal.
+- Plays the queue for you. It preloads the next song and crossfades FADE seconds before the end (or at the MIX-OUT mark).
+- **Mix on the bar:** when the tempo and grid are known, the crossfade starts exactly on a bar line.
+- **Smart fill:** when the queue runs dry, Auto DJ adds the best Smart Next pick, so there's no dead air.
 
-**Approved Library** (your running list of music you have permission to use)
-- Stores the link, title, creator, permission note, approval date, tags and credit notes.
-- **Fetch info** fills in the title and creator and checks that the video will actually play inside the mixer. Some owners block embedding, and you get a warning if so.
-- **Approved-only mode** (on by default) means the decks refuse links that aren't in the library.
+**Smart Next** suggests the next 3 songs and shows the reasons:
+- **Fair rotation:** creators who haven't aired yet, or not for a while, come first. The same creator twice in a row is avoided.
+- **Tempo match:** songs with a close BPM, counting half and double time.
+- **Energy flow:** stays within one energy step.
+- **New releases:** gets a boost until the first play.
+- Never repeats a song within the same show.
 
-**Queue and playlists**: drag to reorder, see the estimated start time of each song and the total queue length, shuffle, save as a named playlist, then load or append it later.
+**Creators**
+- Each creator gets a card with their color, number of songs, plays and airtime this show, and a fair-share bar. This lets you keep things even between the 4 of you.
+- **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
+- Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
 
-**Play log & credits**: every song played is logged. **Credits: this show** builds a ready-to-paste list for your YouTube description from everything played since you pressed ON AIR.
+**Stage view (what viewers see)**
+- A clean full-window page with the official YouTube player, the show name, a LIVE badge, NOW PLAYING, the creator, a permission credit, a progress bar, beat lights and UP NEXT.
+- The video crossfades along with the audio.
+- Your controls, pop-up messages and tooltips never appear on it.
+- Press **V** or **Esc** to go back to the controls. The music keeps playing.
 
-**ON AIR** starts the show timer and arms the dead-air alarm (an on-screen warning only, never heard on stream).
+**Library, playlists, play log**
+- **Approved-only mode** (on by default): decks refuse any link that isn't in the library.
+- Thumbnails get bigger when you hover over them.
+- Playlists can be saved, loaded or appended.
+- The play log builds credits for your YouTube description, including "Support the creators" channel links.
 
 ## Getting the music into StreamYard
 
-Two options. Run a private test broadcast first.
+1. **Share the tab (free, simplest).** Press **STAGE VIEW**. In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"* and tick **Also share tab audio**. Viewers see the stage page and hear the music. Control everything from the Stream Deck while it's on stage.
+2. **Virtual audio mixer (best control).** Install the free **Voicemeeter** (Windows). Route your XLR interface and Chrome into it, and pick *Voicemeeter Output* as your mic in StreamYard.
 
-1. **Share the Chrome tab (free, simplest).** In StreamYard, choose *Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"* and tick **Also share tab audio**. The tab's audio only goes out while the share is in the broadcast, so check how your layout shows it.
-2. **Virtual audio mixer (best control).** Install the free **Voicemeeter** (Windows). Route your XLR interface and Chrome into it, and pick *Voicemeeter Output* as your mic in StreamYard. You then get your voice and the music on one clean channel.
-
-If your XLR interface has a "loopback" feature (RØDECaster, GoXLR, some Focusrite and Motu models), that does the same job as option 2.
+Run a private test broadcast first.
 
 ## Stream Deck
 
-Open **Settings & Stream Deck** in the mixer. Every action has a ready-made URL with a **Copy** button.
-
+Open **Settings & Stream Deck**. Every action has a ready-made URL with a **Copy** button.
 In the Stream Deck app, drag a **Website** action onto a key, paste the URL and tick **"GET request in background"**.
-These buttons work even when StreamYard is the window in front.
+These keys work even when StreamYard is the window in front.
 
-- Each URL contains a private key from `control-key.txt`, so other websites can't press your buttons. To change the key, delete that file and restart the mixer.
-- Keyboard shortcuts also work, but only when the mixer window has focus. A Stream Deck **Hotkey** action needs the mixer window in front.
-- For the **Stream Deck +** dials, assign two Website/hotkey actions to rotate left/right, for example `xfLeft` / `xfRight` or `masterDown` / `masterUp`. This depends on the dial plugin you use, so check the Elgato Marketplace.
+Good keys to set up first: Play A, Play B, MIX ⇄, Auto DJ, TALK, Stage view, Smart Next, Fade all out.
+For the **Stream Deck +** dials, assign rotate left/right to `xfLeft` / `xfRight` or `masterDown` / `masterUp`. This depends on the dial plugin you use.
+
+The URLs contain a private key (`control-key.txt`), so other websites can't press your buttons. To change the key, delete that file and restart.
 
 | Key | Action | Key | Action |
 |---|---|---|---|
 | 1 / 2 | Play-pause A / B | Q / W | Cue A / B |
-| A / S | Next from queue → A / B | Space | MIX ⇄ |
+| A / S | Next from queue → A / B | E / R | Tap tempo A / B |
+| Space | MIX ⇄ | N | Smart Next → queue |
 | Z / X | Fade crossfader to A / B | C | Center |
 | ← / → | Nudge crossfader | ↑ / ↓ | Master ±5 |
 | [ / ] | Deck A volume | ; / ' | Deck B volume |
 | D | Auto DJ | T | Talk duck |
-| O | On Air | Esc | Fade all out |
+| O | On Air | V | Stage view |
+| Esc | Close / leave stage view (never stops music) | | |
 
 ## Your data
 
-- Everything (library, playlists, play log, settings) is saved in Chrome on this computer, under `localhost:8765`. Keep using the start script so the address stays the same.
-- Use **Settings → Export backup** regularly, and **Import backup** to restore it or move to another computer.
-- The only outside connection is to YouTube, to play videos and look up titles. Players use YouTube's privacy-enhanced (`youtube-nocookie.com`) mode.
+Everything is saved **twice**:
+- in Chrome on this computer, and
+- in the `data` folder next to the app: `mixer-data.json`, plus one dated backup per day, keeping the last 30 days.
+
+If Chrome's data is ever cleared, the mixer restores itself from the `data` folder on the next start.
+**Settings → Export backup** gives you one file to copy to another computer or share with your creators. **Import backup** merges it in.
+
+The only outside connections are to YouTube: the players, thumbnails, title look-ups, and the public upload feeds of your creators. Players use YouTube's privacy-enhanced `youtube-nocookie.com` mode.
 
 ## Limits
 
-- **No EQ, filters, BPM or beat-sync.** YouTube doesn't let a web page touch the audio inside its player, so this mixer controls the volume, position and timing of each player. Those features would need downloaded audio files, which is a different app.
-- **Loops are approximate.** A YouTube seek takes a moment, so you'll hear a small gap.
-- **Auto DJ is rule-based.** It follows your queue and fade settings. It's not an AI that picks songs.
-- **Run the mixer in its own Chrome window**, not a hidden background tab. Chrome slows down timers in background tabs, which can make fades late.
-- **Permission is on you.** Even with a creator's OK, YouTube's Content ID can still flag a live stream. Keep the creator's written permission, note it in the Permission field, and post the credits.
+- **Tempo is tapped, not detected.** YouTube doesn't let a web page read the audio inside its player, so the mixer can't hear the beat. You TAP and GRID once per song, and after that everything (lights, bar counter, mixing on the bar, Smart Next tempo match) uses it.
+- **No EQ, filters or pitch/tempo-sync.** Same reason. Those need downloaded audio files, which is a different kind of app.
+- **Loops are approximate.** A YouTube seek takes a moment.
+- **"Smart" means clear rules, not an online AI.** Picks are made on your computer from your own data, and every pick shows its reasons.
+- **The upload feed covers a channel's 15 most recent videos**, including non-music ones. Ignore those once and they stay gone.
+- **Run the mixer in its own Chrome window**, not a hidden background tab. Chrome slows hidden tabs down.
+- **Permission is on you.** Even with full permission, YouTube's Content ID can still flag a live stream. Keep each creator's written OK on file.

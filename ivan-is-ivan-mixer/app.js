@@ -1,17 +1,21 @@
-/* Ivan is Ivan — Live Mixer
+/* Ivan is Ivan — Live Mixer (v2)
  * Two-deck YouTube mixer for live shows. Runs locally in Chrome.
- * No tracking, no accounts. Data lives in this browser's localStorage.
+ * No tracking, no accounts. Data lives in this browser and in the app's data folder.
  */
 'use strict';
 
 // Privacy-enhanced YouTube host for the players.
 const YT_HOST = 'https://www.youtube-nocookie.com';
+const DEFAULT_COLORS = ['#22d3ee', '#ff7a3d', '#a78bfa', '#2ee59d', '#ffd23f', '#f472b6'];
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#8a95a8');
+const thumb = vid => `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+const today = () => new Date().toISOString().slice(0, 10);
 
 function fmt(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
@@ -23,6 +27,14 @@ function fmt(sec) {
 function fmtClock(sec) {
   sec = Math.max(0, Math.floor(sec));
   return Math.floor(sec / 3600) + ':' + String(Math.floor((sec % 3600) / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+}
+
+function ago(ts) {
+  const m = (Date.now() - ts) / 60000;
+  if (m < 1) return 'just now';
+  if (m < 60) return Math.round(m) + ' min ago';
+  if (m < 48 * 60) return Math.round(m / 60) + ' h ago';
+  return Math.round(m / 1440) + ' days ago';
 }
 
 function parseVideoId(input) {
@@ -49,48 +61,156 @@ function parseVideoId(input) {
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { toast('Could not save — browser storage is blocked or full', 'bad'); } }
+  set(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch { toast('Could not save in Chrome — the disk copy still works', 'bad'); }
+    Disk.schedule();
+  }
 };
 
 const S = {
   library: store.get('iii.library', []),     // approved tracks
   queue: store.get('iii.queue', []),         // [{qid, id}]
   playlists: store.get('iii.playlists', []), // [{id, name, items:[trackId]}]
-  history: store.get('iii.history', []),     // play log
+  history: store.get('iii.history', []),     // play log, newest first
+  creators: store.get('iii.creators', []),   // [{id, name, channelId, color}]
+  inbox: store.get('iii.inbox', []),         // new uploads waiting for approval
+  ignored: store.get('iii.ignored', []),     // video IDs dismissed from the inbox
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
-    warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj'
+    warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
+    snapBars: true, smartFill: true
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
   talk: false, voiceTalk: false,
-  autoDJ: false, onAir: false, onAirAt: 0, showElapsed: 0,
-  transitioning: false, deadSince: 0, ytReady: false,
-  creditsMode: 'show'
+  autoDJ: false, onAir: false, onAirAt: 0, stage: false,
+  transitioning: false, mixTarget: null, deadSince: 0, ytReady: false,
+  creditsMode: 'show', smartSeed: 7
 };
 
-const save = {
-  library: () => store.set('iii.library', S.library),
-  queue: () => store.set('iii.queue', S.queue),
-  playlists: () => store.set('iii.playlists', S.playlists),
-  history: () => store.set('iii.history', S.history),
-  cfg: () => store.set('iii.settings', S.cfg)
+const KEYS = {
+  library: 'iii.library', queue: 'iii.queue', playlists: 'iii.playlists', history: 'iii.history',
+  creators: 'iii.creators', inbox: 'iii.inbox', ignored: 'iii.ignored', cfg: 'iii.settings'
+};
+const save = {};
+Object.entries(KEYS).forEach(([name, key]) => { save[name] = () => store.set(key, S[name]); });
+
+/* Disk copy: the local server writes everything to data/mixer-data.json (+ a daily backup),
+   so clearing Chrome's data can never wipe the library. */
+const Disk = {
+  ok: false, key: null, timer: null,
+  schedule() { if (!this.ok) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 1500); },
+  snapshot() {
+    const o = { app: 'ivan-is-ivan-mixer', version: 2, savedAt: new Date().toISOString() };
+    Object.keys(KEYS).forEach(k => { o[k] = S[k]; });
+    return o;
+  },
+  pill(ok, text) { const p = $('#diskStatus'); p.textContent = text; p.className = 'pill ' + (ok ? 'ok' : 'bad'); },
+  async push() {
+    try {
+      const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Key': this.key }, body: JSON.stringify(this.snapshot()) });
+      if (!r.ok) throw new Error(r.status);
+      this.pill(true, 'Disk: saved ✓');
+    } catch { this.pill(false, 'Disk: NOT saved'); }
+  },
+  async restoreIfEmpty() {
+    if (S.library.length) return false;
+    try {
+      const r = await fetch('/api/load', { cache: 'no-store' });
+      if (!r.ok) return false;
+      const d = await r.json();
+      if (!Array.isArray(d.library) || !d.library.length) return false;
+      Object.keys(KEYS).forEach(k => {
+        if (k === 'cfg') { if (d.cfg && typeof d.cfg === 'object') Object.assign(S.cfg, d.cfg); }
+        else if (Array.isArray(d[k])) S[k] = d[k];
+        save[k]();
+      });
+      toast(`Restored ${S.library.length} tracks from the disk copy`, 'good');
+      return true;
+    } catch { return false; }
+  }
 };
 
 const byId = id => S.library.find(t => t.id === id);
 const byVid = vid => S.library.find(t => t.videoId === vid);
 const inLib = t => !!t && S.library.includes(t);
+const creatorById = id => S.creators.find(c => c.id === id);
+function creatorOf(t) {
+  if (!t) return null;
+  return creatorById(t.creatorId) ||
+    (t.artist ? S.creators.find(c => c.name.toLowerCase() === String(t.artist).toLowerCase()) : null) || null;
+}
+const artistOf = t => creatorOf(t)?.name || t?.artist || 'Unknown creator';
+const trackLen = t => Math.max(0, (t.outAt || t.duration || 0) - (t.inAt || 0));
 
-/* ---------------- toasts ---------------- */
+/* ---------------- toasts, confirm modal, tooltips ---------------- */
 
 function toast(msg, kind = '') {
   const el = document.createElement('div');
   el.className = 'toast ' + kind;
   el.textContent = msg;
-  $('#toasts').append(el);
+  const box = $('#toasts');
+  box.append(el);
+  while (box.children.length > 3) box.firstElementChild.remove(); // never bury the controls
   setTimeout(() => el.classList.add('out'), 3800);
   setTimeout(() => el.remove(), 4300);
 }
+
+// Non-blocking confirm. The browser's confirm() pauses the page, which would freeze fades on air.
+let modalDone = null;
+function ask(msg, okLabel = 'Yes') {
+  if (modalDone) modalDone(false);
+  return new Promise(res => {
+    $('#modalMsg').textContent = msg;
+    $('#modalOk').textContent = okLabel;
+    $('#modal').classList.remove('hidden');
+    modalDone = v => { $('#modal').classList.add('hidden'); modalDone = null; res(v); };
+    $('#modalOk').focus();
+  });
+}
+
+function keyName(k) {
+  return ({ ' ': 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' }[k] || (k ? k.toUpperCase() : ''));
+}
+
+// Hover help: every control with a title gets a styled tooltip that also shows its shortcut key.
+const Tip = {
+  el: null, timer: null, cur: null,
+  init() {
+    this.el = $('#tip');
+    document.addEventListener('mouseover', e => {
+      const t = e.target.closest('[title], [data-tip]');
+      if (t === this.cur) return;
+      this.hide();
+      if (!t || S.stage) return;
+      if (t.hasAttribute('title')) { t.dataset.tip = t.getAttribute('title'); t.removeAttribute('title'); }
+      if (!t.dataset.tip) return;
+      this.cur = t;
+      this.timer = setTimeout(() => this.show(t), 350);
+    });
+    document.addEventListener('mousedown', () => this.hide());
+    document.addEventListener('scroll', () => this.hide(), true);
+  },
+  keyFor(t) {
+    let cmd = t.dataset.cmd;
+    const deck = t.closest('.deck');
+    if (!cmd && deck && ['play', 'cue', 'next', 'tap'].includes(t.dataset.a)) cmd = t.dataset.a + (deck.classList.contains('deck-a') ? 'A' : 'B');
+    const k = cmd && COMMANDS[cmd] ? COMMANDS[cmd][1] : null;
+    return k ? keyName(k) : '';
+  },
+  show(t) {
+    if (!t.isConnected) return;
+    const k = this.keyFor(t);
+    this.el.innerHTML = esc(t.dataset.tip) + (k ? ` <kbd>${esc(k)}</kbd>` : '');
+    this.el.classList.remove('hidden');
+    const r = t.getBoundingClientRect(), w = this.el.offsetWidth, h = this.el.offsetHeight;
+    let y = r.bottom + 8;
+    if (y + h > innerHeight - 8) y = r.top - h - 8;
+    this.el.style.left = clamp(r.left + r.width / 2 - w / 2, 8, innerWidth - w - 8) + 'px';
+    this.el.style.top = Math.max(8, y) + 'px';
+  },
+  hide() { clearTimeout(this.timer); this.cur = null; this.el?.classList.add('hidden'); }
+};
 
 /* ---------------- tweens (setInterval so they keep running when the window is in the background) ---------------- */
 
@@ -140,7 +260,8 @@ class Deck {
     this.player = null; this.ready = false; this.track = null;
     this.ytState = -1; this.time = 0; this.dur = 0; this.out = 0; this.lastVol = -1;
     this.played = false; this.finished = false; this.errored = false; this.wantPlay = false;
-    this.cuePoint = 0; this.loopIn = null; this.loop = null; this.markSig = '';
+    this.cuePoint = 0; this.loopIn = null; this.loop = null; this.markSig = ''; this.thumbVid = undefined;
+    this.taps = [];
     this.bind();
     this.render();
   }
@@ -168,10 +289,8 @@ class Deck {
     this.el.addEventListener('drop', e => {
       e.preventDefault(); this.el.classList.remove('drop');
       if (!drag) return;
-      const t = byId(drag.id);
-      if (drag.qid) removeFromQueue(drag.qid);
-      if (t) this.load(t);
-      drag = null;
+      const { id, qid } = drag; drag = null;
+      this.userLoad(byId(id)).then(ok => { if (ok && qid) removeFromQueue(qid); });
     });
   }
 
@@ -190,14 +309,21 @@ class Deck {
     });
   }
 
+  onAirNow() { return this.isPlaying() && this.out > 0.05; }
+
+  // Loads chosen by a person: asks first if this deck is audible on air.
+  async userLoad(track) {
+    if (!track) return false;
+    if (this.onAirNow() && !(await ask(`Deck ${this.id} is ON AIR playing "${this.track.title || this.track.videoId}". Replace it?`, 'Replace'))) return false;
+    this.load(track);
+    return true;
+  }
+
   load(track, autoplay = false) {
     if (!track) return;
-    if (this.isPlaying() && this.out > 0.05 && !autoplay) {
-      if (!confirm(`Deck ${this.id} is playing on air. Replace it?`)) return;
-    }
     this.track = track;
     this.played = false; this.finished = false; this.errored = false;
-    this.loop = null; this.loopIn = null;
+    this.loop = null; this.loopIn = null; this.taps = [];
     this.dur = track.duration || 0;
     this.cuePoint = track.inAt || 0;
     this.time = this.cuePoint;
@@ -206,6 +332,7 @@ class Deck {
     if (this.ready) this.cueCurrent(autoplay);
     this.r.url.value = '';
     this.render();
+    renderSmart();
   }
 
   cueCurrent(autoplay) {
@@ -251,17 +378,66 @@ class Deck {
   act_back() { this.seek(this.time - 10); }
   act_fwd() { this.seek(this.time + 10); }
 
+  /* --- beats & tempo --- */
+
+  act_tap() {
+    if (!this.track) return;
+    const now = performance.now();
+    if (this.taps.length && now - this.taps[this.taps.length - 1] > 2000) this.taps = [];
+    this.taps.push(now);
+    if (this.taps.length > 12) this.taps.shift();
+    if (this.taps.length >= 4) {
+      const iv = (this.taps[this.taps.length - 1] - this.taps[0]) / (this.taps.length - 1);
+      this.track.bpm = Math.round((60000 / iv) * 10) / 10;
+      if (this.track.beat1 == null && this.isPlaying()) this.track.beat1 = Math.round(this.time * 1000) / 1000;
+      this.persist();
+    }
+    this.r.tapBtn.classList.add('hit');
+    setTimeout(() => this.r.tapBtn.classList.remove('hit'), 90);
+    this.render();
+  }
+  act_grid() {
+    if (!this.track) return;
+    this.track.beat1 = Math.round(this.time * 1000) / 1000;
+    this.persist();
+    toast(this.track.bpm ? `Deck ${this.id}: downbeat marked — bar counter synced` : `Deck ${this.id}: downbeat marked. Now TAP the tempo.`);
+    this.render();
+  }
+  act_half() { if (this.track?.bpm) { this.track.bpm = Math.round(this.track.bpm * 5) / 10; this.persist(); } }
+  act_dbl() { if (this.track?.bpm) { this.track.bpm = Math.round(this.track.bpm * 20) / 10; this.persist(); } }
+
+  // Beat position, or null if tempo/downbeat unknown.
+  beat() {
+    const t = this.track;
+    if (!t?.bpm || t.beat1 == null) return null;
+    const beatLen = 60 / t.bpm;
+    const b = (this.time - t.beat1) / beatLen;
+    const i = Math.floor(b);
+    return { beatLen, frac: b - i, inBar: ((i % 4) + 4) % 4, bar: Math.floor(i / 4) + 1, barsLeft: Math.floor(this.remaining() / (beatLen * 4)) };
+  }
+
+  /* --- loops --- */
+
   act_loopIn() { if (!this.track) return; this.loopIn = this.time; this.loop = null; this.render(); }
   act_loopOut() {
     if (this.loopIn == null || this.time <= this.loopIn + 0.5) { toast('Press loop IN first, then OUT a moment later'); return; }
     this.loop = [this.loopIn, this.time]; this.seek(this.loopIn);
   }
-  act_loop8() {
+  act_loopBars() {
     if (!this.track) return;
     if (this.loop) { this.loop = null; this.render(); return; }
-    this.loopIn = this.time; this.loop = [this.time, this.time + 8]; this.render();
+    const t = this.track;
+    let start = this.time, len = 8;
+    if (t.bpm) {
+      const bl = 60 / t.bpm;
+      len = bl * 16;
+      if (t.beat1 != null) start = t.beat1 + Math.round((this.time - t.beat1) / bl) * bl; // snap to nearest beat
+    }
+    this.loopIn = start; this.loop = [start, start + len]; this.render();
   }
   act_loopExit() { this.loop = null; this.render(); }
+
+  /* --- trim --- */
 
   act_setIn() {
     if (!this.track) return;
@@ -279,6 +455,8 @@ class Deck {
     this.persist(); toast(`Deck ${this.id}: start / mix-out cleared`);
   }
 
+  /* --- loading --- */
+
   act_load() {
     const raw = this.r.url.value.trim();
     if (!raw) { this.r.url.focus(); return; }
@@ -293,11 +471,13 @@ class Deck {
       }
       t = { id: 'tmp-' + vid, videoId: vid, title: '', artist: '', license: 'NOT IN LIBRARY' };
     }
-    this.load(t);
+    this.userLoad(t);
   }
-  act_next() {
+  async act_next() {
+    if (!S.queue.length) { toast('Queue is empty — try Smart Next'); return; }
+    if (this.onAirNow() && !(await ask(`Deck ${this.id} is ON AIR. Replace it with the next queued song?`, 'Replace'))) return;
     const t = dequeue();
-    if (t) this.load(t); else toast('Queue is empty');
+    if (t) this.load(t);
   }
 
   hotcue(i, clear) {
@@ -308,6 +488,8 @@ class Deck {
     else { this.seek(c[i]); if (!this.isPlaying()) this.play(); }
     this.persist(); this.render();
   }
+
+  /* --- player events --- */
 
   onState(s) {
     this.ytState = s;
@@ -378,8 +560,15 @@ class Deck {
 
   render() {
     const r = this.r, t = this.track;
+    const c = creatorOf(t);
+    this.el.style.setProperty('--cc', c ? safeColor(c.color) : 'transparent');
     r.title.textContent = t ? (t.title || t.videoId) : '— Empty —';
-    r.artist.textContent = t ? `${t.artist || 'Unknown creator'}${t.license ? ' · ' + t.license : ''}` : 'Drag a track here or paste an approved link';
+    r.artist.textContent = t ? `${artistOf(t)}${t.license ? ' · ' + t.license : ''}` : 'Drag a track here or paste an approved link';
+    if ((t?.videoId || null) !== this.thumbVid) {
+      this.thumbVid = t?.videoId || null;
+      r.thumb.src = this.thumbVid ? thumb(this.thumbVid) : '';
+      r.platter.classList.toggle('empty', !this.thumbVid);
+    }
     const playing = this.isPlaying();
     const st = !t ? 'EMPTY' : this.errored ? 'ERROR' : playing ? 'PLAYING' : this.finished ? 'ENDED' : this.ytState === 2 ? 'PAUSED' : 'CUED';
     r.state.textContent = st; r.state.dataset.s = st;
@@ -393,6 +582,15 @@ class Deck {
     r.bar.style.width = pct + '%';
     r.playhead.style.left = pct + '%';
 
+    // beats
+    const b = this.beat();
+    r.bpm.textContent = t?.bpm ? `${t.bpm.toFixed(1)} BPM` : '— BPM';
+    r.barpos.textContent = b ? `BAR ${b.bar}.${b.inBar + 1} · ${b.barsLeft} bars left` : (t?.bpm ? 'press GRID on a "1"' : (t ? 'TAP to set tempo' : ''));
+    const lights = r.lights.children;
+    for (let i = 0; i < 4; i++) lights[i].classList.toggle('on', !!(b && playing && b.inBar === i && b.frac < 0.4));
+    this.el.classList.toggle('beat', !!(b && playing && b.frac < 0.18));
+    r.loopBtn.textContent = this.loop ? 'LOOPING' : (t?.bpm ? '4 BAR' : '8 s');
+
     const warn = playing && this.dur > 0 && rem <= S.cfg.warnSec;
     const live = liveDeck() === this;
     this.el.classList.toggle('playing', playing);
@@ -404,29 +602,35 @@ class Deck {
     const nextReady = !!(o && o.track && !o.played && !o.errored);
     let msg = '';
     if (S.transitioning && playing && o?.isPlaying()) msg = `MIXING INTO DECK ${S.mixTarget}…`;
-    else if (playing && S.autoDJ && live && nextReady) msg = `AUTO MIX TO ${o.id} IN ${fmt(Math.max(0, rem - S.cfg.fadeSec))}`;
-    else if (playing && S.autoDJ && live) msg = S.queue.length ? `AUTO DJ: NEXT SONG LOADING ON DECK ${o.id}` : 'AUTO DJ: QUEUE EMPTY — ADD MUSIC';
+    else if (playing && S.autoDJ && live && nextReady) msg = `AUTO MIX TO ${o.id} IN ${fmt(Math.max(0, rem - S.cfg.fadeSec))}${S.cfg.snapBars && b ? ' · ON THE BAR' : ''}`;
+    else if (playing && S.autoDJ && live) msg = S.queue.length || S.cfg.smartFill ? `AUTO DJ: NEXT SONG LOADING ON DECK ${o.id}` : 'AUTO DJ: QUEUE EMPTY — ADD MUSIC';
     else if (warn) msg = nextReady ? `ENDING — NEXT ON ${o.id}: ${o.track.title || o.track.videoId}` : `ENDING — NOTHING CUED ON DECK ${o.id}`;
     r.mixout.textContent = msg;
 
     // markers only rebuild when they change
     const cues = t?.cues || [];
-    const sig = [this.dur, t?.inAt, t?.outAt, this.cuePoint, this.loop?.join(), cues.join()].join('|');
+    const sig = [this.dur, t?.inAt, t?.outAt, this.cuePoint, this.loop?.join(), cues.join(), t?.bpm, t?.beat1].join('|');
     if (sig !== this.markSig) {
       this.markSig = sig;
       let h = '';
       if (this.dur) {
         const at = s => (clamp(s / this.dur, 0, 1) * 100).toFixed(2) + '%';
+        // bar grid: one faint line every 4 bars (16 beats)
+        if (t?.bpm && t.beat1 != null) {
+          const step = (60 / t.bpm) * 16;
+          let first = t.beat1 - Math.floor(t.beat1 / step) * step;
+          for (let s = first, n = 0; s < this.dur && n < 400; s += step, n++) h += `<div class="mk grid" style="left:${at(s)}"></div>`;
+        }
         if (this.loop) h += `<div class="mk loop" style="left:${at(this.loop[0])};width:calc(${at(this.loop[1])} - ${at(this.loop[0])})"></div>`;
         if (this.cuePoint) h += `<div class="mk cue" style="left:${at(this.cuePoint)}"></div>`;
         if (t?.inAt) h += `<div class="mk in" style="left:${at(t.inAt)}"><span>S</span></div>`;
         if (t?.outAt) h += `<div class="mk out" style="left:${at(t.outAt)}"><span>OUT</span></div>`;
-        cues.forEach((c, i) => { if (c != null) h += `<div class="mk hc" style="left:${at(c)}"><span>${i + 1}</span></div>`; });
+        cues.forEach((c2, i) => { if (c2 != null) h += `<div class="mk hc" style="left:${at(c2)}"><span>${i + 1}</span></div>`; });
       }
       r.markers.innerHTML = h;
-      $$('[data-hc]', this.el).forEach(b => b.classList.toggle('set', cues[+b.dataset.hc] != null));
+      $$('[data-hc]', this.el).forEach(btn => btn.classList.toggle('set', cues[+btn.dataset.hc] != null));
     }
-    r.loop8.classList.toggle('active', !!this.loop);
+    r.loopBtn.classList.toggle('active', !!this.loop);
   }
 }
 
@@ -474,6 +678,15 @@ const Probe = {
   }
 };
 
+function probeLength(t) {
+  if (!S.ytReady || t.duration) return;
+  Probe.get(t.videoId).then(p => {
+    if (p?.duration) t.duration = p.duration;
+    else if (p?.error) t.flag = 'will not play in embed (error ' + p.error + ')';
+    save.library(); renderLibrary(); renderQueue();
+  });
+}
+
 /* ---------------- mixing logic ---------------- */
 
 function syncXfUI() { $('#xfader').value = Math.round(S.xf * 1000); }
@@ -517,6 +730,7 @@ function onDeckEnded(d) {
   const n = other(d);
   if (n.isPlaying()) return;
   if (!n.track || n.played || n.errored) {
+    if (!S.queue.length && S.cfg.smartFill) smartFillOne();
     const t = dequeue();
     if (!t) { toast('Auto DJ: queue is empty', 'bad'); return; }
     n.load(t, true);
@@ -528,14 +742,23 @@ function autoTick() {
   if (!S.autoDJ) return;
   const live = liveDeck(), next = other(live);
   // Pre-load the next song onto the idle deck.
-  if (!S.transitioning && !next.isPlaying() && (!next.track || next.played || next.errored) && S.queue.length) {
-    const t = dequeue();
-    if (t) next.load(t, false);
+  if (!S.transitioning && !next.isPlaying() && (!next.track || next.played || next.errored)) {
+    if (!S.queue.length && S.cfg.smartFill) smartFillOne();
+    if (S.queue.length) { const t = dequeue(); if (t) next.load(t, false); }
   }
   if (S.transitioning) return;
   if (live.isPlaying() && live.dur > 0 && next.ready && next.track && !next.played && !next.errored) {
     const rem = live.remaining();
-    if (rem <= S.cfg.fadeSec + 0.25) mixTo(next, Math.min(S.cfg.fadeSec, rem));
+    const b = S.cfg.snapBars ? live.beat() : null;
+    const barLen = b ? b.beatLen * 4 : 0;
+    if (rem <= S.cfg.fadeSec + barLen + 0.25) {
+      // On the bar: wait for the start of the next bar, unless time is running out.
+      if (b && rem > S.cfg.fadeSec * 0.5 + 0.5) {
+        const intoBar = (b.inBar + b.frac) * b.beatLen;
+        if (intoBar > 0.15) return;
+      }
+      mixTo(next, Math.min(S.cfg.fadeSec, rem));
+    }
   }
 }
 
@@ -546,6 +769,7 @@ function setAutoDJ(on) {
     const live = liveDeck();
     if (!live.isPlaying() && !other(live).isPlaying()) {
       if (!live.track || live.finished || live.errored) {
+        if (!S.queue.length && S.cfg.smartFill) smartFillOne();
         const t = dequeue();
         if (t) live.load(t, true); else toast('Queue is empty — add approved tracks first', 'bad');
       } else live.play();
@@ -577,10 +801,371 @@ function toggleOnAir() {
   S.onAir = !S.onAir;
   if (S.onAir) S.onAirAt = Date.now();
   $('#onair').classList.toggle('on', S.onAir);
+  renderCreators(); renderSmart();
 }
 
 function setMaster(v) { S.cfg.master = clamp(Math.round(v), 0, 100); $('#master').value = S.cfg.master; save.cfg(); applyVolumes(); }
 function setDeckVol(id, v) { S.cfg['vol' + id] = clamp(Math.round(v), 0, 100); $('#vol' + id).value = S.cfg['vol' + id]; save.cfg(); applyVolumes(); }
+
+/* ---------------- Smart Next: fair creator rotation, tempo, energy, new releases ---------------- */
+
+// Start of the current show (ON AIR), or the last 3 hours.
+const showStart = () => S.onAirAt || (Date.now() - 3 * 3600e3);
+
+// Airtime per creator this show: { creatorId: {plays, secs, lastAt} }
+function airStats() {
+  const since = showStart(), st = {};
+  for (const h of S.history) {
+    if (h.at < since) break;
+    const t = byVid(h.videoId);
+    const c = creatorOf(t) || creatorById(h.creatorId);
+    if (!c) continue;
+    const s = st[c.id] || (st[c.id] = { plays: 0, secs: 0, lastAt: 0 });
+    s.plays++; s.secs += t ? trackLen(t) : 0; s.lastAt = Math.max(s.lastAt, h.at);
+  }
+  return st;
+}
+
+function jitter(vid) {
+  let h = S.smartSeed;
+  for (const ch of vid) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 1000) / 250; // 0..4
+}
+
+function suggest(n = 3, { creatorId = null } = {}) {
+  const since = showStart();
+  const playedNow = new Set(S.history.filter(h => h.at >= since).map(h => h.videoId));
+  const busy = new Set([decks.A?.track?.id, decks.B?.track?.id, ...S.queue.map(q => q.id)]);
+  const live = liveDeck();
+  const ref = (live?.isPlaying() ? live.track : null) || other(live)?.track || live?.track || null;
+  const lastCreator = S.history[0] ? (creatorOf(byVid(S.history[0].videoId)) || creatorById(S.history[0].creatorId))?.id : null;
+  const st = airStats(), now = Date.now();
+  return S.library
+    .filter(t => !t.flag && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
+    .map(t => {
+      let score = jitter(t.videoId);
+      const why = [];
+      if (playedNow.has(t.videoId)) score -= 100;
+      const c = creatorOf(t);
+      if (c && S.creators.length > 1 && !creatorId) {
+        const s = st[c.id];
+        if (!s) { score += 25; why.push(`${c.name} hasn't aired yet`); }
+        else {
+          const mins = (now - s.lastAt) / 60000;
+          score += Math.min(mins, 30) * 0.8;
+          if (mins > 15) why.push(`${c.name}: ${Math.round(mins)} min since last`);
+        }
+        if (c.id === lastCreator) score -= 20;
+      }
+      if (t.isNew) { score += 18; why.push('NEW release'); }
+      if (ref?.bpm && t.bpm && ref !== t) {
+        const d = Math.min(...[1, 2, 0.5].map(k => Math.abs(t.bpm * k - ref.bpm) / ref.bpm * 100));
+        if (d <= 3) { score += 14; why.push(`tempo match ${Math.round(t.bpm)} BPM`); }
+        else if (d <= 8) { score += 7; why.push(`close tempo ${Math.round(t.bpm)} BPM`); }
+        else score -= 3;
+      }
+      if (ref?.energy && t.energy) {
+        const de = t.energy - ref.energy;
+        if (Math.abs(de) <= 1) { score += 5; why.push(de > 0 ? 'energy up' : de < 0 ? 'energy down' : 'same energy'); }
+        else score -= 4;
+      }
+      if (!t.plays && !t.isNew) { score += 4; why.push('never played'); }
+      if (playedNow.has(t.videoId)) why.unshift('already played this show');
+      if (!why.length) why.push('fresh pick');
+      return { t, score, why };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n);
+}
+
+function smartFillOne() {
+  const s = suggest(1)[0];
+  if (!s || s.score < -50) return false;
+  addToQueue(s.t.id);
+  toast(`Smart DJ queued "${s.t.title || s.t.videoId}" — ${s.why[0]}`);
+  return true;
+}
+
+function renderSmart() {
+  const box = $('#smart');
+  if (!box || !decks.B) return;
+  const picks = suggest(3);
+  box.innerHTML = picks.map(({ t, why }) => {
+    const c = creatorOf(t);
+    return `<div class="sm-card" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" draggable="true">
+      <img src="${thumb(t.videoId)}" alt="" loading="lazy">
+      <div class="sm-body">
+        <div class="ttl">${esc(t.title || t.videoId)}</div>
+        <div class="sub"><i class="dot"></i>${esc(artistOf(t))} · ${t.duration ? fmt(trackLen(t)) : '?:??'}${t.bpm ? ' · ' + Math.round(t.bpm) + ' BPM' : ''}</div>
+        <div class="chips">${why.slice(0, 3).map(w => `<span class="chip">${esc(w)}</span>`).join('')}</div>
+      </div>
+      <div class="sm-acts">
+        <button type="button" data-s="q" title="Add to the end of the queue">+ Queue</button>
+        <button type="button" data-s="top" title="Play this next (top of the queue)">Next</button>
+        <button type="button" data-s="A" class="la" title="Load onto deck A">A</button>
+        <button type="button" data-s="B" class="lb" title="Load onto deck B">B</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="dim smart-empty">Add songs to your library to get suggestions.</div>';
+}
+
+function initSmartUI() {
+  $('#smart').addEventListener('click', e => {
+    const b = e.target.closest('button[data-s]'); if (!b) return;
+    const t = byId(b.closest('.sm-card').dataset.id); if (!t) return;
+    const a = b.dataset.s;
+    if (a === 'q') addToQueue(t.id);
+    else if (a === 'top') addToQueue(t.id, 0);
+    else decks[a].userLoad(t);
+  });
+  $('#smart').addEventListener('dragstart', e => {
+    const card = e.target.closest('.sm-card'); if (!card) return;
+    drag = { id: card.dataset.id };
+    e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', card.dataset.id);
+  });
+  $('#smartReroll').onclick = () => { S.smartSeed = (S.smartSeed * 7 + 13) % 100003; renderSmart(); };
+}
+
+/* ---------------- creators & new-upload alerts ---------------- */
+
+const Creators = {
+  async resolve(input) {
+    input = (input || '').trim();
+    if (!input) return '';
+    let m = input.match(/(UC[\w-]{22})/);
+    if (m) return m[1];
+    m = input.match(/@([\w.\-]{3,30})/);
+    const handle = m ? m[1] : (/^[\w.\-]{3,30}$/.test(input) ? input : null);
+    if (!handle) throw new Error('Use a channel link, @handle or channel ID (UC…)');
+    if (!Remote.ok) throw new Error('Start the mixer with the start script to look up channels');
+    const r = await fetch('/api/resolve?h=' + encodeURIComponent(handle), { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (!j.channelId) throw new Error(j.error || 'Channel not found — paste the channel ID (UC…) instead');
+    return j.channelId;
+  },
+
+  async check(c) {
+    if (!c.channelId || !Remote.ok) return 0;
+    const r = await fetch('/api/feed?c=' + c.channelId, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`${c.name}: feed unavailable (${r.status})`);
+    const xml = new DOMParser().parseFromString(await r.text(), 'application/xml');
+    let added = 0;
+    for (const e of xml.getElementsByTagName('entry')) {
+      const vid = e.getElementsByTagName('yt:videoId')[0]?.textContent;
+      if (!vid || !/^[\w-]{11}$/.test(vid) || byVid(vid) || S.ignored.includes(vid) || S.inbox.some(x => x.videoId === vid)) continue;
+      S.inbox.push({
+        videoId: vid,
+        title: e.getElementsByTagName('title')[0]?.textContent || '',
+        published: e.getElementsByTagName('published')[0]?.textContent || '',
+        creatorId: c.id, foundAt: Date.now()
+      });
+      added++;
+    }
+    c.lastCheck = Date.now();
+    save.creators(); save.inbox();
+    return added;
+  },
+
+  async checkAll(manual) {
+    const list = S.creators.filter(c => c.channelId);
+    if (!list.length) { if (manual) toast('Add a channel link to a creator first'); return; }
+    if (!Remote.ok) { if (manual) toast('Start the mixer with the start script to check for new songs', 'bad'); return; }
+    $('#crStatus').textContent = 'Checking for new uploads…';
+    let added = 0; const errs = [];
+    for (const c of list) {
+      try { added += await this.check(c); } catch (e) { errs.push(e.message); }
+    }
+    $('#crStatus').textContent = `Last checked ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` + (errs.length ? ' · ' + errs.join(' · ') : '');
+    renderCreators(); renderInbox();
+    if (added) toast(`🔔 ${added} new upload${added > 1 ? 's' : ''} from your creators — see the Creators tab`, 'good');
+    else if (manual) toast(errs.length ? 'Check finished with problems — see the Creators tab' : 'No new uploads', errs.length ? 'bad' : '');
+  }
+};
+
+let crEditId = null;
+
+function renderCreators() {
+  const st = airStats();
+  const total = Object.values(st).reduce((s, x) => s + x.secs, 0) || 1;
+  const sel = $('#libCreator'), cur = sel.value;
+  sel.innerHTML = '<option value="">— Creator —</option>' + S.creators.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  sel.value = cur;
+  $('#crCards').innerHTML = S.creators.map(c => {
+    const s = st[c.id] || { plays: 0, secs: 0, lastAt: 0 };
+    const songs = S.library.filter(t => creatorOf(t)?.id === c.id).length;
+    const waiting = S.inbox.filter(i => i.creatorId === c.id).length;
+    const share = Math.round((s.secs / total) * 100);
+    return `<div class="cr-card" style="--cc:${safeColor(c.color)}" data-id="${c.id}">
+      <div class="cr-top"><span class="cr-dot"></span><b>${esc(c.name)}</b>${waiting ? `<span class="badge">${waiting} new</span>` : ''}</div>
+      <div class="cr-meta">${c.channelId ? `<a href="https://www.youtube.com/channel/${esc(c.channelId)}" target="_blank" rel="noopener" title="Open their channel">channel linked ✓</a>` : '<span class="bad">no channel linked</span>'} · ${songs} song${songs === 1 ? '' : 's'}</div>
+      <div class="cr-air" title="Share of music airtime this show: ${share}%"><i style="width:${share}%"></i></div>
+      <div class="cr-stats">${s.plays} play${s.plays === 1 ? '' : 's'} · ${fmt(s.secs)} on air · ${share}%${s.lastAt ? ` · last ${ago(s.lastAt)}` : ''}</div>
+      <div class="cr-acts">
+        <button type="button" data-c="smart" title="Queue the best song from this creator">+ Queue a song</button>
+        <button type="button" data-c="check" title="Check this creator for new uploads">🔔</button>
+        <button type="button" data-c="edit" title="Edit">✎</button>
+        <button type="button" data-c="del" title="Remove creator (their songs stay in the library)">✕</button>
+      </div></div>`;
+  }).join('') || '<div class="dim">Add your creators above. Each gets a color, fair-airtime tracking and alerts when they upload something new.</div>';
+}
+
+function renderInbox() {
+  const items = [...S.inbox].sort((a, b) => (b.published || '').localeCompare(a.published || ''));
+  $('#inboxList').innerHTML = items.map(i => {
+    const c = creatorById(i.creatorId);
+    const pub = Date.parse(i.published);
+    return `<li data-vid="${esc(i.videoId)}" style="--cc:${safeColor(c?.color)}">
+      <img class="th" src="${thumb(i.videoId)}" alt="" loading="lazy">
+      <div class="grow"><div class="ttl">${esc(i.title || i.videoId)}</div>
+        <div class="sub"><i class="dot"></i>${esc(c?.name || 'Unknown')} · ${isFinite(pub) ? 'uploaded ' + ago(pub) : ''}</div></div>
+      <button type="button" data-i="watch" title="Watch on YouTube first">↗</button>
+      <button type="button" data-i="ok" class="primary" title="Add to the approved library">✓ Approve</button>
+      <button type="button" data-i="okq" title="Approve and add to the queue">✓ + Queue</button>
+      <button type="button" data-i="no" class="danger" title="Not a song / don't want it — hide it for good">Ignore</button></li>`;
+  }).join('') || '<li class="dim">Nothing waiting. New uploads from your creators appear here automatically (checked every 30 minutes while not on air).</li>';
+  const n = S.inbox.length;
+  $('#inboxCount').textContent = n;
+  $('#inboxPillN').textContent = n;
+  $('#inboxPill').classList.toggle('hidden', !n);
+  $('#crTabCount').textContent = n;
+  $('#crTabCount').classList.toggle('hidden', !n);
+}
+
+function approveInbox(vid, queue) {
+  const i = S.inbox.find(x => x.videoId === vid);
+  if (!i) return;
+  S.inbox = S.inbox.filter(x => x !== i);
+  if (!byVid(vid)) {
+    const c = creatorById(i.creatorId);
+    const t = {
+      id: uid(), videoId: vid, url: 'https://www.youtube.com/watch?v=' + vid, title: i.title, artist: c?.name || '',
+      creatorId: i.creatorId, license: 'Full permission — creator', approvedOn: today(), tags: '', notes: '',
+      duration: 0, plays: 0, addedAt: Date.now(), isNew: true, publishedAt: i.published
+    };
+    S.library.push(t);
+    probeLength(t);
+    if (queue) addToQueue(t.id);
+  }
+  save.inbox(); save.library();
+  renderInbox(); renderLibrary(); renderCreators(); renderSmart();
+}
+
+function initCreatorsUI() {
+  const resetForm = () => {
+    crEditId = null; $('#crForm').reset();
+    $('#crColor').value = DEFAULT_COLORS[S.creators.length % DEFAULT_COLORS.length];
+    $('#crSave').textContent = 'Add creator'; $('#crCancel').classList.add('hidden');
+  };
+  resetForm();
+  $('#crCancel').onclick = resetForm;
+  $('#crForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('#crName').value.trim();
+    if (!name) return;
+    let channelId = '';
+    try { channelId = await Creators.resolve($('#crChannel').value); }
+    catch (err) { toast(err.message, 'bad'); return; }
+    const color = safeColor($('#crColor').value);
+    let c = crEditId && creatorById(crEditId);
+    if (c) Object.assign(c, { name, channelId, color });
+    else { c = { id: uid(), name, channelId, color }; S.creators.push(c); }
+    save.creators(); resetForm(); renderCreators(); renderLibrary(); renderQueue();
+    toast(`Creator "${name}" saved`, 'good');
+    if (channelId) { try { const n = await Creators.check(c); renderCreators(); renderInbox(); if (n) toast(`${n} upload(s) from ${name} waiting for approval`, 'good'); } catch (err) { toast(err.message, 'bad'); } }
+  });
+  $('#crCheck').onclick = () => Creators.checkAll(true);
+  $('#crCards').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-c]'); if (!b) return;
+    const c = creatorById(b.closest('.cr-card').dataset.id); if (!c) return;
+    const a = b.dataset.c;
+    if (a === 'smart') {
+      const s = suggest(1, { creatorId: c.id })[0];
+      if (s) { addToQueue(s.t.id); toast(`Queued "${s.t.title}"`); } else toast(`No available songs from ${c.name}`);
+    } else if (a === 'check') {
+      try { const n = await Creators.check(c); renderCreators(); renderInbox(); toast(n ? `${n} new from ${c.name}` : `Nothing new from ${c.name}`); }
+      catch (err) { toast(err.message, 'bad'); }
+    } else if (a === 'edit') {
+      crEditId = c.id; $('#crName').value = c.name; $('#crChannel').value = c.channelId || ''; $('#crColor').value = safeColor(c.color);
+      $('#crSave').textContent = 'Save creator'; $('#crCancel').classList.remove('hidden'); $('#crName').focus();
+    } else if (a === 'del' && await ask(`Remove creator "${c.name}"? Their songs stay in the library.`, 'Remove')) {
+      S.creators = S.creators.filter(x => x !== c);
+      S.inbox = S.inbox.filter(i => i.creatorId !== c.id);
+      save.creators(); save.inbox(); renderCreators(); renderInbox(); renderLibrary();
+    }
+  });
+  $('#inboxList').addEventListener('click', e => {
+    const b = e.target.closest('button[data-i]'); if (!b) return;
+    const vid = b.closest('li').dataset.vid;
+    const a = b.dataset.i;
+    if (a === 'watch') window.open('https://www.youtube.com/watch?v=' + vid, '_blank', 'noopener');
+    else if (a === 'ok' || a === 'okq') { approveInbox(vid, a === 'okq'); toast('Approved and added to the library', 'good'); }
+    else if (a === 'no') {
+      S.inbox = S.inbox.filter(x => x.videoId !== vid);
+      S.ignored.push(vid); if (S.ignored.length > 2000) S.ignored.splice(0, S.ignored.length - 2000);
+      save.inbox(); save.ignored(); renderInbox(); renderCreators();
+    }
+  });
+  $('#inboxApproveAll').onclick = async () => {
+    if (!S.inbox.length) return;
+    if (!(await ask(`Approve all ${S.inbox.length} waiting uploads into the library?`, 'Approve all'))) return;
+    [...S.inbox].forEach(i => approveInbox(i.videoId, false));
+    toast('All approved', 'good');
+  };
+  $('#inboxIgnoreAll').onclick = async () => {
+    if (!S.inbox.length) return;
+    if (!(await ask(`Ignore all ${S.inbox.length} waiting uploads? They won't come back.`, 'Ignore all'))) return;
+    S.ignored.push(...S.inbox.map(i => i.videoId)); S.inbox = [];
+    save.inbox(); save.ignored(); renderInbox(); renderCreators();
+  };
+  $('#inboxPill').onclick = () => openTab('creators');
+}
+
+/* ---------------- stage view: the clean display viewers see ---------------- */
+
+let stageSig = '';
+function setStage(on) {
+  S.stage = on;
+  Tip.hide();
+  document.body.classList.toggle('staged', on);
+  $('#stage').classList.toggle('hidden', !on);
+  $('#stageBtn').classList.toggle('on', on);
+  Object.values(decks).forEach(d => {
+    d.r.screen.classList.toggle('staged', on);
+    d.r.screen.style.opacity = ''; d.r.screen.style.zIndex = '';
+  });
+  stageSig = '';
+  renderStage();
+}
+
+function renderStage() {
+  if (!S.stage) return;
+  const A = decks.A, B = decks.B, pa = A.isPlaying(), pb = B.isPlaying();
+  // Video crossfades along with the audio.
+  let wa = 1 - S.xf;
+  if (pa && !pb) wa = 1; else if (!pa && pb) wa = 0; else if (!pa && !pb) wa = liveDeck() === A ? 1 : 0;
+  const wb = 1 - wa;
+  A.r.screen.style.opacity = wa.toFixed(2); B.r.screen.style.opacity = wb.toFixed(2);
+  A.r.screen.style.zIndex = wa >= wb ? 62 : 61; B.r.screen.style.zIndex = wb > wa ? 62 : 61;
+
+  const main = wa >= wb ? A : B, t = main.track, c = creatorOf(t);
+  const o = other(main);
+  const nxt = (o.track && !o.played && !o.errored) ? o.track : byId(S.queue[0]?.id);
+  const sig = [t?.id, t?.title, c?.id, c?.color, nxt?.id].join('|');
+  if (sig !== stageSig) {
+    stageSig = sig;
+    $('#stage').style.setProperty('--cc', safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')));
+    $('#stTitle').textContent = t ? (t.title || '') : 'The music starts soon';
+    $('#stArtist').textContent = t ? artistOf(t) : 'Ivan is Ivan';
+    $('#stCredit').textContent = t ? `Played with the creator's permission · youtu.be/${t.videoId}` : '';
+    $('#stArt').style.backgroundImage = t ? `url("${thumb(t.videoId)}")` : 'none';
+    $('#stNext').textContent = nxt ? `${nxt.title || nxt.videoId} — ${artistOf(nxt)}` : '—';
+  }
+  $('#stProg').style.width = (main.dur ? clamp(main.time / main.dur * 100, 0, 100) : 0) + '%';
+  const b = main.beat(), playing = main.isPlaying();
+  const lights = $('#stBeat').children;
+  for (let i = 0; i < 4; i++) lights[i].classList.toggle('on', !!(b && playing && b.inBar === i && b.frac < 0.4));
+  $('#stGlow').classList.toggle('pulse', !!(b && playing && b.frac < 0.2));
+}
 
 /* ---------------- voice auto-duck (reads your mic level only, never records) ---------------- */
 
@@ -640,6 +1225,11 @@ const Remote = {
     pill.textContent = this.ok ? 'Stream Deck: ready' : 'Stream Deck: keyboard only';
     pill.className = 'pill ' + (this.ok ? 'ok' : '');
     renderKeys();
+    if (this.ok) {
+      Disk.ok = true; Disk.key = this.key;
+      if (await Disk.restoreIfEmpty()) renderEverything();
+      Disk.push();
+    } else Disk.pill(false, 'Disk: off (no start script)');
   },
   async poll() {
     if (!this.ok || this.busy) return;
@@ -660,6 +1250,8 @@ const COMMANDS = {
   cueB: ['Cue Deck B', 'w', () => decks.B.act_cue()],
   nextA: ['Load next from queue → A', 'a', () => decks.A.act_next()],
   nextB: ['Load next from queue → B', 's', () => decks.B.act_next()],
+  tapA: ['Tap tempo Deck A', 'e', () => decks.A.act_tap()],
+  tapB: ['Tap tempo Deck B', 'r', () => decks.B.act_tap()],
   mix: ['MIX ⇄ to the other deck (fade time)', ' ', mixNow],
   xfA: ['Fade crossfader to A (keep B playing)', 'z', () => mixTo(decks.A, S.cfg.fadeSec, { stopOld: false })],
   xfB: ['Fade crossfader to B (keep A playing)', 'x', () => mixTo(decks.B, S.cfg.fadeSec, { stopOld: false })],
@@ -667,10 +1259,12 @@ const COMMANDS = {
   xfLeft: ['Nudge crossfader toward A', 'ArrowLeft', () => setXf(S.xf - 0.05)],
   xfRight: ['Nudge crossfader toward B', 'ArrowRight', () => setXf(S.xf + 0.05)],
   autodj: ['Auto DJ on / off', 'd', () => setAutoDJ(!S.autoDJ)],
+  smart: ['Smart Next: queue the best next song', 'n', () => { if (!smartFillOne()) toast('No suggestions available'); }],
   talk: ['Talk-over duck on / off', 't', () => setTalk(!S.talk)],
   talkOn: ['Talk-over duck ON', null, () => setTalk(true)],
   talkOff: ['Talk-over duck OFF', null, () => setTalk(false)],
   onair: ['On Air on / off', 'o', toggleOnAir],
+  stage: ['Stage view on / off (share this tab)', 'v', () => setStage(!S.stage)],
   masterUp: ['Master volume +5', 'ArrowUp', () => setMaster(S.cfg.master + 5)],
   masterDown: ['Master volume −5', 'ArrowDown', () => setMaster(S.cfg.master - 5)],
   volADown: ['Deck A volume −5', '[', () => setDeckVol('A', S.cfg.volA - 5)],
@@ -681,7 +1275,7 @@ const COMMANDS = {
   hcA2: ['Deck A hot cue 2', null, () => decks.A.hotcue(1)],
   hcB1: ['Deck B hot cue 1', null, () => decks.B.hotcue(0)],
   hcB2: ['Deck B hot cue 2', null, () => decks.B.hotcue(1)],
-  panic: ['Fade everything out (2 s)', 'Escape', panic]
+  panic: ['Fade everything out (2 s) — Stream Deck / button only', null, panic]
 };
 
 function runCommand(name) {
@@ -693,13 +1287,19 @@ const KEYMAP = {};
 Object.entries(COMMANDS).forEach(([name, c]) => { if (c[1]) KEYMAP[c[1]] = name; });
 
 document.addEventListener('keydown', e => {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-  if (e.target.closest('input, textarea, select') && e.key !== 'Escape') return;
+  if (e.key === 'Escape') {
+    if (modalDone) modalDone(false);
+    else if (!$('#help').classList.contains('hidden')) $('#help').classList.add('hidden');
+    else if (e.target.closest('input, textarea, select')) e.target.blur();
+    else if (S.stage) setStage(false);
+    return;
+  }
+  if (modalDone || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target.closest('input, textarea, select')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const name = KEYMAP[k];
   if (!name) return;
   e.preventDefault();
-  if (e.key === 'Escape' && e.target.closest('input, textarea, select')) { e.target.blur(); return; }
   runCommand(name);
 });
 
@@ -707,11 +1307,12 @@ document.addEventListener('keydown', e => {
 
 function logPlay(d) {
   const t = d.track;
-  S.history.unshift({ at: Date.now(), id: t.id, videoId: t.videoId, title: t.title, artist: t.artist, license: t.license || '', deck: d.id });
+  const c = creatorOf(t);
+  S.history.unshift({ at: Date.now(), id: t.id, videoId: t.videoId, title: t.title, artist: artistOf(t), creatorId: c?.id || null, license: t.license || '', deck: d.id });
   if (S.history.length > 1000) S.history.length = 1000;
   save.history();
-  if (inLib(t)) { t.plays = (t.plays || 0) + 1; t.lastPlayed = Date.now(); save.library(); renderLibrary(); }
-  renderHistory();
+  if (inLib(t)) { t.plays = (t.plays || 0) + 1; t.lastPlayed = Date.now(); delete t.isNew; save.library(); renderLibrary(); }
+  renderHistory(); renderCreators(); renderSmart();
 }
 
 function buildCredits(mode) {
@@ -719,14 +1320,19 @@ function buildCredits(mode) {
   let since;
   if (mode === 'show' && S.onAirAt) since = S.onAirAt;
   else { const d = new Date(); d.setHours(0, 0, 0, 0); since = d.getTime(); }
-  const seen = new Set(), lines = [];
+  const seen = new Set(), lines = [], featured = new Map();
   [...S.history].reverse().forEach(h => {
     if (h.at < since || seen.has(h.videoId)) return;
     seen.add(h.videoId);
     const t = byVid(h.videoId) || h;
-    lines.push(`• ${t.title || h.videoId} — ${t.artist || 'Unknown creator'} — https://youtu.be/${h.videoId}${t.notes ? ' (' + t.notes + ')' : ''}`);
+    const c = creatorOf(t) || creatorById(h.creatorId);
+    if (c) featured.set(c.id, c);
+    lines.push(`• ${t.title || h.videoId} — ${c?.name || t.artist || 'Unknown creator'} — https://youtu.be/${h.videoId}${t.notes ? ' (' + t.notes + ')' : ''}`);
   });
-  $('#credits').value = lines.length ? 'Music in this episode (used with the creators\' permission):\n' + lines.join('\n') : '';
+  let text = lines.length ? "Music in this episode (used with the creators' permission):\n" + lines.join('\n') : '';
+  const chans = [...featured.values()].filter(c => c.channelId);
+  if (chans.length) text += '\n\nSupport the creators:\n' + chans.map(c => `• ${c.name} — https://www.youtube.com/channel/${c.channelId}`).join('\n');
+  $('#credits').value = text;
   if (!lines.length) toast(mode === 'show' && !S.onAirAt ? 'No show yet — press ON AIR when you go live' : 'Nothing played yet');
 }
 
@@ -746,8 +1352,6 @@ function removeFromQueue(qid) {
   save.queue(); renderQueue();
 }
 
-const trackLen = t => Math.max(0, (t.outAt || t.duration || 0) - (t.inAt || 0));
-
 // Seconds until each queued song is expected to start.
 function queueEtas(items) {
   const live = liveDeck(), next = other(live);
@@ -762,17 +1366,21 @@ function renderQueue() {
   const etas = queueEtas(items.map(x => x.t));
   $('#queueList').innerHTML = items.map(({ q, t }, i) => {
     const len = trackLen(t);
-    return `<li draggable="true" data-qid="${q.qid}" data-id="${t.id}">
+    const c = creatorOf(t);
+    return `<li draggable="true" data-qid="${q.qid}" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" class="cc-row">
       <span class="num">${i + 1}</span>
-      <div class="grow"><div class="ttl">${esc(t.title || t.videoId)}</div><div class="sub">${esc(t.artist || 'Unknown creator')} · ${esc(t.license || 'no permission note')}</div></div>
-      <span class="eta" title="Estimated start">+${fmt(etas[i])}</span>
+      <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
+      <div class="grow"><div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div><div class="sub"><i class="dot"></i>${esc(artistOf(t))} · ${esc(t.license || 'no permission note')}</div></div>
+      ${t.bpm ? `<span class="len">${Math.round(t.bpm)} BPM</span>` : ''}
+      <span class="eta" title="Estimated start time from now">+${fmt(etas[i])}</span>
       <span class="len">${len ? fmt(len) : '?:??'}</span>
-      <button type="button" data-q="A">→A</button><button type="button" data-q="B">→B</button>
-      <button type="button" data-q="up" title="Move up">▲</button><button type="button" data-q="del" title="Remove">✕</button>
+      <button type="button" data-q="A" class="la" title="Load onto deck A">A</button><button type="button" data-q="B" class="lb" title="Load onto deck B">B</button>
+      <button type="button" data-q="up" title="Move up">▲</button><button type="button" data-q="del" title="Remove from queue">✕</button>
     </li>`;
   }).join('');
   $('#queueCount').textContent = items.length;
   $('#queueTime').textContent = fmt(items.reduce((s, x) => s + trackLen(x.t), 0));
+  renderSmart();
 }
 
 // Refresh the ETA column without rebuilding rows (keeps drags and clicks intact).
@@ -792,7 +1400,7 @@ function initQueueUI() {
     else if (act === 'up') {
       const i = S.queue.findIndex(q => q.qid === qid);
       if (i > 0) { [S.queue[i - 1], S.queue[i]] = [S.queue[i], S.queue[i - 1]]; save.queue(); renderQueue(); }
-    } else { removeFromQueue(qid); decks[act].load(byId(id)); }
+    } else decks[act].userLoad(byId(id)).then(ok => { if (ok) removeFromQueue(qid); });
   });
   list.addEventListener('dragstart', e => {
     const li = e.target.closest('li'); if (!li) return;
@@ -822,17 +1430,17 @@ function initQueueUI() {
   body.addEventListener('dragover', e => { if (drag && !drag.qid) e.preventDefault(); });
   body.addEventListener('drop', e => { if (drag && !drag.qid && !e.target.closest('#queueList')) { e.preventDefault(); addToQueue(drag.id); drag = null; } });
 
-  $('#qClear').onclick = () => { if (S.queue.length && confirm('Clear the whole queue?')) { S.queue = []; save.queue(); renderQueue(); } };
+  $('#qClear').onclick = async () => { if (S.queue.length && await ask('Clear the whole queue?', 'Clear')) { S.queue = []; save.queue(); renderQueue(); } };
   $('#qShuffle').onclick = () => {
     for (let i = S.queue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [S.queue[i], S.queue[j]] = [S.queue[j], S.queue[i]]; }
     save.queue(); renderQueue();
   };
-  $('#qSave').onclick = () => {
+  $('#qSave').onclick = async () => {
     const name = $('#plName').value.trim();
     if (!name) { toast('Give the playlist a name'); $('#plName').focus(); return; }
     if (!S.queue.length) { toast('Queue is empty'); return; }
     const existing = S.playlists.find(p => p.name.toLowerCase() === name.toLowerCase());
-    if (existing && !confirm(`Overwrite playlist "${existing.name}"?`)) return;
+    if (existing && !(await ask(`Overwrite playlist "${existing.name}"?`, 'Overwrite'))) return;
     const items = S.queue.map(q => q.id);
     if (existing) existing.items = items; else S.playlists.push({ id: uid(), name, items });
     save.playlists(); renderPlaylists(); $('#plName').value = '';
@@ -847,7 +1455,8 @@ let editId = null, formDuration = 0;
 function resetLibForm() {
   editId = null; formDuration = 0;
   $('#libForm').reset();
-  $('#libDate').value = new Date().toISOString().slice(0, 10);
+  $('#libDate').value = today();
+  $('#libLicense').value = '';
   $('#libSave').textContent = 'Add to approved library';
   $('#libCancel').classList.add('hidden');
   $('#libInfo').textContent = '';
@@ -866,6 +1475,10 @@ async function fetchInfo() {
       if (!$('#libArtist').value) $('#libArtist').value = j.author_name || '';
     }
   } catch { /* oEmbed blocked; the probe below still tries */ }
+  // Auto-pick the creator when the channel name matches.
+  const a = $('#libArtist').value.trim().toLowerCase();
+  const match = S.creators.find(c => c.name.toLowerCase() === a);
+  if (match && !$('#libCreator').value) { $('#libCreator').value = match.id; if (!$('#libLicense').value) $('#libLicense').value = 'Full permission — creator'; }
   if (!S.ytReady) { info.textContent = 'YouTube player not ready — length will be filled in on first play.'; return; }
   const p = await Probe.get(vid);
   if (p?.error) {
@@ -876,7 +1489,7 @@ async function fetchInfo() {
     formDuration = p.duration;
     if (!$('#libTitle').value && p.title) $('#libTitle').value = p.title;
     if (!$('#libArtist').value && p.author) $('#libArtist').value = p.author;
-    info.textContent = `✓ Plays in embed · length ${fmt(p.duration)}`;
+    info.textContent = `✓ Plays in the mixer · length ${fmt(p.duration)}`;
   } else info.textContent = 'Could not read length — it will fill in on first play.';
 }
 
@@ -884,13 +1497,19 @@ function saveLibForm(e) {
   e.preventDefault();
   const vid = parseVideoId($('#libUrl').value);
   if (!vid) { toast('That is not a YouTube link', 'bad'); return; }
+  const creatorId = $('#libCreator').value || null;
+  const bpm = parseFloat($('#libBpm').value);
+  const energy = parseInt($('#libEnergy').value, 10);
   const fields = {
     videoId: vid,
     url: 'https://www.youtube.com/watch?v=' + vid,
     title: $('#libTitle').value.trim(),
-    artist: $('#libArtist').value.trim(),
+    creatorId,
+    artist: $('#libArtist').value.trim() || creatorById(creatorId)?.name || '',
     license: $('#libLicense').value.trim(),
     approvedOn: $('#libDate').value,
+    bpm: bpm >= 40 && bpm <= 220 ? Math.round(bpm * 10) / 10 : undefined,
+    energy: energy >= 1 && energy <= 5 ? energy : undefined,
     tags: $('#libTags').value.trim(),
     notes: $('#libNotes').value.trim()
   };
@@ -905,10 +1524,12 @@ function saveLibForm(e) {
   } else {
     t = Object.assign({ id: uid(), addedAt: Date.now(), plays: 0, duration: formDuration || 0 }, fields);
     S.library.push(t);
+    S.inbox = S.inbox.filter(i => i.videoId !== vid);
     toast(`Added "${t.title || vid}" to approved library`, 'good');
-    if (!t.duration && S.ytReady) Probe.get(vid).then(p => { if (p?.duration) { t.duration = p.duration; save.library(); renderLibrary(); renderQueue(); } });
+    probeLength(t);
   }
-  save.library(); resetLibForm(); renderLibrary(); renderQueue();
+  Object.keys(t).forEach(k => { if (t[k] === undefined) delete t[k]; });
+  save.library(); save.inbox(); resetLibForm(); renderLibrary(); renderQueue(); renderCreators(); renderInbox();
   Object.values(decks).forEach(d => d.render());
 }
 
@@ -916,9 +1537,12 @@ function editTrack(t) {
   editId = t.id; formDuration = 0;
   $('#libUrl').value = t.url || t.videoId;
   $('#libTitle').value = t.title || '';
+  $('#libCreator').value = creatorOf(t)?.id || '';
   $('#libArtist').value = t.artist || '';
   $('#libLicense').value = t.license || '';
   $('#libDate').value = t.approvedOn || '';
+  $('#libBpm').value = t.bpm || '';
+  $('#libEnergy').value = t.energy || '';
   $('#libTags').value = t.tags || '';
   $('#libNotes').value = t.notes || '';
   $('#libSave').textContent = 'Save changes';
@@ -930,24 +1554,29 @@ function editTrack(t) {
 function renderLibrary() {
   const q = $('#libSearch').value.trim().toLowerCase();
   const rows = S.library
-    .filter(t => !q || [t.title, t.artist, t.tags, t.license, t.notes].join(' ').toLowerCase().includes(q))
-    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  $('#libBody').innerHTML = rows.map(t => `<tr draggable="true" data-id="${t.id}">
-      <td class="handle">⋮⋮</td>
-      <td><div class="ttl"><b>${esc(t.title || t.videoId)}</b></div>
-        <div class="dim">${esc(t.artist || 'Unknown creator')}${t.tags ? ' · ' + esc(t.tags) : ''}</div>
+    .filter(t => !q || [t.title, artistOf(t), t.tags, t.license, t.notes].join(' ').toLowerCase().includes(q))
+    .sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0) || (a.title || '').localeCompare(b.title || ''));
+  $('#libBody').innerHTML = rows.map(t => {
+    const c = creatorOf(t);
+    return `<tr draggable="true" data-id="${t.id}" style="--cc:${safeColor(c?.color)}">
+      <td><img class="th lib-th" src="${thumb(t.videoId)}" alt="" loading="lazy"></td>
+      <td><div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}<b>${esc(t.title || t.videoId)}</b></div>
+        <div class="dim"><i class="dot"></i>${esc(artistOf(t))}${t.tags ? ' · ' + esc(t.tags) : ''}</div>
         ${t.flag ? `<div class="flag">⚠ ${esc(t.flag)}</div>` : ''}</td>
       <td class="dim">${t.duration ? fmt(t.duration) : '?:??'}</td>
+      <td class="dim">${t.bpm ? Math.round(t.bpm) : '—'}</td>
+      <td class="energy" title="Energy ${t.energy || '?'} of 5">${t.energy ? '●'.repeat(t.energy) + '<span class="dim">' + '●'.repeat(5 - t.energy) + '</span>' : '<span class="dim">—</span>'}</td>
       <td class="dim">${esc(t.license || '—')}${t.approvedOn ? `<br><small>${esc(t.approvedOn)}</small>` : ''}</td>
       <td class="dim">${t.plays || 0}</td>
       <td class="acts">
-        <button type="button" data-l="A" class="la" title="Load to deck A">A</button>
-        <button type="button" data-l="B" class="lb" title="Load to deck B">B</button>
-        <button type="button" data-l="q" title="Add to queue">+Q</button>
+        <button type="button" data-l="A" class="la" title="Load onto deck A">A</button>
+        <button type="button" data-l="B" class="lb" title="Load onto deck B">B</button>
+        <button type="button" data-l="q" title="Add to the queue">+Q</button>
         <button type="button" data-l="open" title="Open on YouTube">↗</button>
-        <button type="button" data-l="edit" title="Edit">✎</button>
-        <button type="button" data-l="del" title="Delete">✕</button>
-      </td></tr>`).join('');
+        <button type="button" data-l="edit" title="Edit details, BPM and energy">✎</button>
+        <button type="button" data-l="del" title="Remove from the approved library">✕</button>
+      </td></tr>`;
+  }).join('');
   $('#libCount').textContent = S.library.length;
 }
 
@@ -957,18 +1586,23 @@ function initLibraryUI() {
   $('#libFetch').onclick = fetchInfo;
   $('#libCancel').onclick = resetLibForm;
   $('#libSearch').addEventListener('input', renderLibrary);
-  $('#libBody').addEventListener('click', e => {
+  $('#libCreator').addEventListener('change', e => {
+    const c = creatorById(e.target.value);
+    if (c && !$('#libLicense').value) $('#libLicense').value = 'Full permission — creator';
+    if (c && !$('#libArtist').value) $('#libArtist').value = c.name;
+  });
+  $('#libBody').addEventListener('click', async e => {
     const b = e.target.closest('button[data-l]'); if (!b) return;
     const t = byId(b.closest('tr').dataset.id); if (!t) return;
     const a = b.dataset.l;
-    if (a === 'A' || a === 'B') decks[a].load(t);
+    if (a === 'A' || a === 'B') decks[a].userLoad(t);
     else if (a === 'q') { addToQueue(t.id); toast(`Queued "${t.title || t.videoId}"`); }
     else if (a === 'open') window.open('https://www.youtube.com/watch?v=' + t.videoId, '_blank', 'noopener');
     else if (a === 'edit') editTrack(t);
-    else if (a === 'del' && confirm(`Remove "${t.title || t.videoId}" from the approved library?`)) {
+    else if (a === 'del' && await ask(`Remove "${t.title || t.videoId}" from the approved library?`, 'Remove')) {
       S.library = S.library.filter(x => x !== t);
       S.queue = S.queue.filter(q => q.id !== t.id);
-      save.library(); save.queue(); renderLibrary(); renderQueue();
+      save.library(); save.queue(); renderLibrary(); renderQueue(); renderCreators();
     }
   });
   $('#libBody').addEventListener('dragstart', e => {
@@ -999,18 +1633,19 @@ function renderPlaylists() {
     const len = tracks.reduce((s, t) => s + trackLen(t), 0);
     return `<li data-id="${p.id}"><div class="grow"><div class="ttl">${esc(p.name)}</div>
       <div class="sub">${tracks.length} tracks · ${fmt(len)}</div></div>
-      <button type="button" data-p="load">Load</button><button type="button" data-p="append">Append</button>
-      <button type="button" data-p="del" class="danger">✕</button></li>`;
+      <button type="button" data-p="load" title="Replace the queue with this playlist">Load</button>
+      <button type="button" data-p="append" title="Add this playlist to the end of the queue">Append</button>
+      <button type="button" data-p="del" class="danger" title="Delete playlist">✕</button></li>`;
   }).join('') || '<li class="dim">No playlists yet.</li>';
 }
 
 function initPlaylistsUI() {
-  $('#plList').addEventListener('click', e => {
+  $('#plList').addEventListener('click', async e => {
     const b = e.target.closest('button[data-p]'); if (!b) return;
     const p = S.playlists.find(x => x.id === b.closest('li').dataset.id); if (!p) return;
     const a = b.dataset.p;
-    if (a === 'del') { if (confirm(`Delete playlist "${p.name}"?`)) { S.playlists = S.playlists.filter(x => x !== p); save.playlists(); renderPlaylists(); } return; }
-    if (a === 'load') { if (S.queue.length && !confirm('Replace the current queue?')) return; S.queue = []; }
+    if (a === 'del') { if (await ask(`Delete playlist "${p.name}"?`, 'Delete')) { S.playlists = S.playlists.filter(x => x !== p); save.playlists(); renderPlaylists(); } return; }
+    if (a === 'load') { if (S.queue.length && !(await ask('Replace the current queue?', 'Replace'))) return; S.queue = []; }
     p.items.filter(byId).forEach(id => S.queue.push({ qid: uid(), id }));
     save.queue(); renderQueue(); openTab('queue');
     toast(`Playlist "${p.name}" ${a === 'load' ? 'loaded' : 'appended'}`, 'good');
@@ -1020,11 +1655,13 @@ function initPlaylistsUI() {
 /* ---------------- history ---------------- */
 
 function renderHistory() {
-  $('#histList').innerHTML = S.history.slice(0, 200).map(h => `<li>
-    <span class="num">${h.deck}</span>
-    <div class="grow"><div class="ttl">${esc(h.title || h.videoId)}</div><div class="sub">${esc(h.artist || '')} · ${esc(h.license || '')}</div></div>
-    <span class="len">${new Date(h.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></li>`).join('')
-    || '<li class="dim">Nothing played yet.</li>';
+  $('#histList').innerHTML = S.history.slice(0, 200).map(h => {
+    const c = creatorById(h.creatorId) || creatorOf(byVid(h.videoId));
+    return `<li style="--cc:${safeColor(c?.color)}" class="cc-row">
+    <span class="num">${esc(h.deck)}</span>
+    <div class="grow"><div class="ttl">${esc(h.title || h.videoId)}</div><div class="sub"><i class="dot"></i>${esc(c?.name || h.artist || '')} · ${esc(h.license || '')}</div></div>
+    <span class="len">${new Date(h.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></li>`;
+  }).join('') || '<li class="dim">Nothing played yet.</li>';
 }
 
 function initHistoryUI() {
@@ -1035,14 +1672,13 @@ function initHistoryUI() {
     try { await navigator.clipboard.writeText($('#credits').value); toast('Credits copied — paste into your YouTube description', 'good'); }
     catch { $('#credits').select(); toast('Press Ctrl+C to copy'); }
   };
-  $('#histClear').onclick = () => { if (confirm('Clear the whole play log?')) { S.history = []; save.history(); renderHistory(); } };
+  $('#histClear').onclick = async () => { if (await ask('Clear the whole play log?', 'Clear')) { S.history = []; save.history(); renderHistory(); renderCreators(); } };
 }
 
 /* ---------------- settings, backup, shortcuts ---------------- */
 
 function renderKeys() {
   const base = `${location.origin}/api/cmd/`;
-  const keyName = k => ({ ' ': 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' }[k] || k?.toUpperCase());
   $('#keysBody').innerHTML = Object.entries(COMMANDS).map(([name, c]) => {
     const url = Remote.ok ? `${base}${name}?k=${Remote.key}` : '';
     return `<tr><td>${esc(c[0])}</td><td>${c[1] ? `<kbd>${esc(keyName(c[1]))}</kbd>` : '—'}</td>
@@ -1052,10 +1688,10 @@ function renderKeys() {
 }
 
 function exportData() {
-  const data = { app: 'ivan-is-ivan-mixer', version: 1, exportedAt: new Date().toISOString(), library: S.library, playlists: S.playlists, history: S.history };
+  const data = Disk.snapshot();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  a.download = `ivan-mixer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `ivan-mixer-backup-${today()}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
@@ -1064,6 +1700,16 @@ async function importData(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.library)) throw new Error('no library in file');
+    // creators first so tracks can point at them
+    const crMap = {};
+    (data.creators || []).forEach(raw => {
+      if (!raw?.name) return;
+      const chan = /^UC[\w-]{22}$/.test(raw.channelId || '') ? raw.channelId : '';
+      const existing = S.creators.find(c => (chan && c.channelId === chan) || c.name.toLowerCase() === String(raw.name).toLowerCase());
+      if (existing) { crMap[raw.id] = existing.id; return; }
+      const c = { id: uid(), name: String(raw.name), channelId: chan, color: safeColor(raw.color) };
+      S.creators.push(c); crMap[raw.id] = c.id;
+    });
     const idMap = {};
     let added = 0;
     data.library.forEach(raw => {
@@ -1077,6 +1723,10 @@ async function importData(file) {
         approvedOn: String(raw.approvedOn || ''), tags: String(raw.tags || ''), notes: String(raw.notes || ''),
         duration: +raw.duration || 0, plays: +raw.plays || 0, addedAt: +raw.addedAt || Date.now()
       };
+      if (crMap[raw.creatorId]) t.creatorId = crMap[raw.creatorId];
+      if (+raw.bpm >= 40 && +raw.bpm <= 220) t.bpm = +raw.bpm;
+      if (raw.beat1 != null && isFinite(+raw.beat1)) t.beat1 = +raw.beat1;
+      if (+raw.energy >= 1 && +raw.energy <= 5) t.energy = Math.round(+raw.energy);
       if (+raw.inAt) t.inAt = +raw.inAt;
       if (+raw.outAt) t.outAt = +raw.outAt;
       if (Array.isArray(raw.cues)) t.cues = raw.cues.slice(0, 4).map(c => (c == null ? null : +c));
@@ -1089,8 +1739,9 @@ async function importData(file) {
       if (S.playlists.some(x => x.name === p.name)) return;
       S.playlists.push({ id: uid(), name: String(p.name), items }); pls++;
     });
-    save.library(); save.playlists(); renderLibrary(); renderPlaylists(); renderQueue();
-    toast(`Imported ${added} new track(s) and ${pls} playlist(s)`, 'good');
+    save.library(); save.playlists(); save.creators();
+    renderEverything();
+    toast(`Imported ${added} new track(s), ${pls} playlist(s)`, 'good');
   } catch (e) { toast('Import failed: ' + e.message, 'bad'); }
 }
 
@@ -1121,11 +1772,24 @@ function renderMeters() {
   $('#masterVal').textContent = S.cfg.master;
 }
 
+function renderBpmMatch() {
+  const a = decks.A.track?.bpm, b = decks.B.track?.bpm;
+  $('#bmA').textContent = a ? a.toFixed(1) : '—';
+  $('#bmB').textContent = b ? b.toFixed(1) : '—';
+  const el = $('#bmDelta');
+  if (a && b) {
+    const d = Math.min(...[1, 2, 0.5].map(k => Math.abs(b * k - a) / a * 100));
+    el.textContent = d <= 4 ? `Δ ${d.toFixed(1)}% ✓ MIX` : `Δ ${d.toFixed(1)}%`;
+    el.className = 'bm-d ' + (d <= 4 ? 'good' : d <= 8 ? 'ok' : 'bad');
+  } else { el.textContent = 'TEMPO'; el.className = 'bm-d'; }
+}
+
 function initMixerUI() {
   $('#volA').value = S.cfg.volA; $('#volB').value = S.cfg.volB; $('#master').value = S.cfg.master;
   $('#fadeSec').value = S.cfg.fadeSec; $('#curve').value = S.cfg.curve;
   $('#duckLevel').value = S.cfg.duckLevel; $('#duckVal').textContent = S.cfg.duckLevel + '%';
   $('#voiceThresh').value = S.cfg.voiceThresh; $('#micThreshMark').style.left = S.cfg.voiceThresh + '%';
+  $('#snapBars').checked = S.cfg.snapBars; $('#smartFill').checked = S.cfg.smartFill;
 
   $('#volA').oninput = e => setDeckVol('A', +e.target.value);
   $('#volB').oninput = e => setDeckVol('B', +e.target.value);
@@ -1133,12 +1797,20 @@ function initMixerUI() {
   $('#xfader').oninput = e => setXf(+e.target.value / 1000);
   $('#curve').onchange = e => { S.cfg.curve = e.target.value; save.cfg(); applyVolumes(); };
   $('#fadeSec').onchange = e => { S.cfg.fadeSec = clamp(+e.target.value || 0, 0, 30); e.target.value = S.cfg.fadeSec; save.cfg(); };
+  $('#snapBars').onchange = e => { S.cfg.snapBars = e.target.checked; save.cfg(); };
+  $('#smartFill').onchange = e => { S.cfg.smartFill = e.target.checked; save.cfg(); };
   $$('.xf-snap button').forEach(b => { b.onclick = () => setXf(+b.dataset.xf); });
   $('#mixNow').onclick = mixNow;
   $('#autoDJ').onclick = () => setAutoDJ(!S.autoDJ);
   $('#talk').onclick = () => setTalk(!S.talk);
   $('#onair').onclick = toggleOnAir;
   $('#panic').onclick = panic;
+  $('#stageBtn').onclick = () => setStage(true);
+  $('#stageExit').onclick = () => setStage(false);
+  $('#helpBtn').onclick = () => $('#help').classList.remove('hidden');
+  $('#helpClose').onclick = () => $('#help').classList.add('hidden');
+  $('#modalOk').onclick = () => modalDone && modalDone(true);
+  $('#modalCancel').onclick = () => modalDone && modalDone(false);
   $('#duckLevel').oninput = e => {
     S.cfg.duckLevel = +e.target.value; $('#duckVal').textContent = S.cfg.duckLevel + '%'; save.cfg();
     S.duckTarget = null; updateDuck();
@@ -1156,7 +1828,11 @@ function openTab(name) {
 
 /* ---------------- main loop ---------------- */
 
-function renderAll() { Object.values(decks).forEach(d => d.render()); renderMeters(); }
+function renderAll() { Object.values(decks).forEach(d => d.render()); renderMeters(); renderBpmMatch(); renderStage(); }
+
+function renderEverything() {
+  renderCreators(); renderInbox(); renderQueue(); renderLibrary(); renderPlaylists(); renderHistory(); renderKeys(); renderAll();
+}
 
 function deadAirCheck() {
   const mode = S.cfg.deadAirMode;
@@ -1193,13 +1869,17 @@ window.onYouTubeIframeAPIReady = () => {
 function boot() {
   decks.A = new Deck('A', $('#mountA'));
   decks.B = new Deck('B', $('#mountB'));
-  initMixerUI(); initQueueUI(); initLibraryUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
+  Tip.init();
+  initMixerUI(); initQueueUI(); initSmartUI(); initLibraryUI(); initCreatorsUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab); });
-  renderQueue(); renderLibrary(); renderPlaylists(); renderHistory(); renderKeys(); syncXfUI(); applyVolumes();
-  Remote.init();
+  renderEverything(); syncXfUI(); applyVolumes();
+  Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
+
+  // Look for new uploads every 30 minutes, but never while on air.
+  setInterval(() => { if (!S.onAir) Creators.checkAll(false); }, 30 * 60 * 1000);
 
   if (location.protocol === 'file:') $('#fileWarn').classList.remove('hidden');
-  $('#power').onclick = () => $('#splash').classList.add('hidden');
+  $('#power').onclick = () => { $('#splash').classList.add('hidden'); if (!S.library.length && !S.creators.length) $('#help').classList.remove('hidden'); };
 
   setTimeout(() => {
     if (!S.ytReady) { const p = $('#ytStatus'); p.textContent = 'YouTube: not loading — check internet'; p.className = 'pill bad'; }
