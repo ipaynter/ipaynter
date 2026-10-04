@@ -18,6 +18,15 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.2.0 — 2026-10-04 — Clean and simple
+Commit: `pending`
+- **Click any song in the list** to cue it as **UP NEXT** on the free deck.
+- **One big ▶ Play next** (or Space, or the Stream Deck *mix* key) brings it in. If nothing is cued, it plays the next song in the list. If nothing is playing, it just starts.
+- **Slimmer decks:** picture, title, time to end, progress, ▶ and cue. Everything else (seek, tempo, hot cues, loops, trim, link box) sits behind **⋯**.
+- **Slimmer mixer:** Manual · Assist · Auto, ▶ Play next, crossfader, master and 🎙 Talk. Deck faders, fade time, curve, voice duck and the rest sit under **more**.
+- **Smaller list rows**, so more songs fit on screen.
+- Writers, Log and Settings stay closed until you click one. Click it again to close it.
+
 ## v3.1.0 — 2026-10-04 — Easy like Sunday morning
 Commit: `1a10bab`
 - **New look:** calm, flat and compact. Small decks, an inline crossover mixer, and slim faders.

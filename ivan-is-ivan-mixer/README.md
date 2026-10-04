@@ -80,21 +80,20 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 **The list (one list for everything)**
 - Each song shows its YouTube picture, title, writer, start time from now and length.
 - Status of each song: **▶ ON A/B** (playing), **ON A/B** (lined up on a deck), **NEXT**, **✓ played** (this show), or **⚠ blocked** (embedding is off; use ↻ to check again after it's fixed).
-- Hover a row for its buttons: **A** / **B** load it onto a deck, **↑** plays it next, **✎** opens its details (title, writer, BPM, energy, notes), **✕** removes it. Double-click a row to load it onto the free deck.
+- **Click a song** to cue it as **UP NEXT**, then press **▶ Play next**. Hover a row for its buttons: **A** / **B** load it onto a deck, **↑** plays it next, **✎** opens its details (title, writer, BPM, energy, notes), **✕** removes it.
 - **✨ Line-up** is the line-up assistant. It arranges the songs still to play so the writers get their fair share (you 40%, the others 20% each), the tempo and energy flow, and new songs come early. **Undo** puts the list back.
 - **Find…** filters the list.
 
 **Decks A and B** (compact)
 - Picture, title and writer, plus a big **time to end** that turns yellow at 30 s and red at 10 s, and a progress bar you can click to jump.
-- Buttons: **▶** play, **cue**, **⏮**, **−10 / +10**, **next ⤵** (the next song from the list), **tap / grid** (tempo and beat counter).
-- **⋯** opens hot cues, loops and trim (start / mix-out marks).
+- Buttons: **▶** play and **cue**.
+- **⋯** opens seek, next ⤵, tap / grid (tempo), hot cues, loops, trim and the link box.
 
 **Mixer: inline crossover**
 - The **Manual · Assist · Auto** switch.
-- The crossfader, **Mix ⇄**, fade time and curve.
-- Slim A / B / Master faders with level bars.
-- **🎙 Talk**, which dips the music while you speak.
-- **more** holds voice auto-duck, mix on the bar, tempo match and crossfader snaps.
+- **▶ Play next**: the main button. Brings in the cued song, or the next in the list.
+- The crossfader, master volume and **🎙 Talk**.
+- **more** holds deck faders, fade time and curve, voice auto-duck, mix on the bar, tempo match, crossfader snaps and fade all out.
 
 **Writers**
 - A card for each writer with their picture, channel, songs, and target against actual airtime this show.
@@ -126,7 +125,7 @@ Open **Settings & Stream Deck**. Every action has a ready-made URL with a **Copy
 In the Stream Deck app, drag a **Website** action onto a key, paste the URL and tick **"GET request in background"**.
 These keys work even when StreamYard is the window in front.
 
-Good keys to set up first: Play A, Play B, Mix ⇄, Manual, Assist, Auto, Talk, ✨ Line-up, Fade all out.
+Good keys to set up first: Play A, Play B, Play next, Manual, Assist, Auto, Talk, ✨ Line-up, Fade all out.
 For the **Stream Deck +** dials, assign rotate left/right to `xfLeft` / `xfRight` or `masterDown` / `masterUp`. This depends on the dial plugin you use.
 
 The URLs contain a private key (`control-key.txt`), so other websites can't press your buttons. To change the key, delete that file and restart.
@@ -135,7 +134,7 @@ The URLs contain a private key (`control-key.txt`), so other websites can't pres
 |---|---|---|---|
 | 1 / 2 | Play-pause A / B | Q / W | Cue A / B |
 | A / S | Next from the list → A / B | E / R | Tap tempo A / B |
-| Space | Mix ⇄ | | |
+| Space | ▶ Play next | | |
 | Z / X | Fade crossfader to A / B | C | Center |
 | ← / → | Nudge crossfader | ↑ / ↓ | Master ±5 |
 | [ / ] | Deck A volume | ; / ' | Deck B volume |

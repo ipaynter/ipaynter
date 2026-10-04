@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=3.1.0">
+<link rel="stylesheet" href="styles.css?v=3.2.0">
 </head>
 <body>
 
@@ -45,39 +45,32 @@
 
   <section class="mixer">
     <div class="mode" role="group" aria-label="Who is driving">
-      <button type="button" data-mode="manual" data-cmd="modeManual" title="MANUAL: you DJ. Nothing happens by itself; the list just shows what's next.">Manual</button>
-      <button type="button" data-mode="assist" data-cmd="modeAssist" title="ASSIST: lines up the next song on the free deck and mixes it in when a song ends, if you haven't. You read the room and can change anything.">Assist</button>
-      <button type="button" data-mode="auto" data-cmd="modeAuto" title="AUTO: runs the show by itself down your list. When the list runs out it keeps going with fair picks from your writers. Press Manual to take over.">Auto</button>
+      <button type="button" data-mode="manual" data-cmd="modeManual" title="MANUAL: you DJ. Click a song in the list to cue it, then Play next.">Manual</button>
+      <button type="button" data-mode="assist" data-cmd="modeAssist" title="ASSIST: the next song in the list is cued for you and mixed in when a song ends, if you haven't. Click any song to change what's next.">Assist</button>
+      <button type="button" data-mode="auto" data-cmd="modeAuto" title="AUTO: runs the show down the list, and keeps going with fair picks when the list ends. Press Manual to take over.">Auto</button>
     </div>
-
+    <button id="mixNow" class="btn playnext" type="button" data-cmd="mix" title="Play the cued song now: it fades in over the fade time and the old one stops (Space)">▶ Play next</button>
     <div class="xf">
       <b class="xa">A</b>
       <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader" data-cmd="xfRight" title="Crossfader: left plays A, right plays B">
       <b class="xb">B</b>
     </div>
     <div class="row">
-      <button id="mixNow" class="btn mixnow" type="button" data-cmd="mix" title="Crossfade to the other deck now (fade time), then stop the old deck">Mix ⇄</button>
-      <label class="fade" title="Crossfade length">fade <input type="number" id="fadeSec" min="0" max="30" step="1" value="8">s</label>
-      <select id="curve" title="Crossfader curve">
-        <option value="smooth">smooth</option>
-        <option value="linear">linear</option>
-        <option value="cut">cut</option>
-      </select>
-    </div>
-
-    <div class="faders">
-      <label class="fd fd-a" title="Deck A volume"><span>A</span><input type="range" id="volA" min="0" max="100" value="80" data-cmd="volAUp"><i class="meter" id="meterA"><i></i></i><em id="volAVal">80</em></label>
-      <label class="fd fd-b" title="Deck B volume"><span>B</span><input type="range" id="volB" min="0" max="100" value="80" data-cmd="volBUp"><i class="meter" id="meterB"><i></i></i><em id="volBVal">80</em></label>
-      <label class="fd fd-m" title="Master volume: set it so the music sits under your voice"><span>M</span><input type="range" id="master" min="0" max="100" value="90" data-cmd="masterUp"><i class="meter" id="meterM"><i></i></i><em id="masterVal">90</em></label>
-    </div>
-
-    <div class="row">
+      <label class="fd fd-m grow" title="Master volume: set it so the music sits under your voice"><span>M</span><input type="range" id="master" min="0" max="100" value="90" data-cmd="masterUp"><i class="meter" id="meterM"><i></i></i><em id="masterVal">90</em></label>
       <button id="talk" class="btn talk" type="button" data-cmd="talk" title="Talk-over: dips the music while you speak. Press again to bring it back.">🎙 Talk</button>
-      <label class="duck" title="How quiet the music gets while you talk">to <b id="duckVal">25%</b><input type="range" id="duckLevel" min="0" max="70" value="25"></label>
     </div>
 
     <details class="more-mix">
       <summary>more</summary>
+      <div class="faders">
+        <label class="fd fd-a" title="Deck A volume"><span>A</span><input type="range" id="volA" min="0" max="100" value="80" data-cmd="volAUp"><i class="meter" id="meterA"><i></i></i><em id="volAVal">80</em></label>
+        <label class="fd fd-b" title="Deck B volume"><span>B</span><input type="range" id="volB" min="0" max="100" value="80" data-cmd="volBUp"><i class="meter" id="meterB"><i></i></i><em id="volBVal">80</em></label>
+      </div>
+      <div class="row">
+        <label class="fade" title="Crossfade length">fade <input type="number" id="fadeSec" min="0" max="30" step="1" value="8">s</label>
+        <select id="curve" title="Crossfader curve"><option value="smooth">smooth</option><option value="linear">linear</option><option value="cut">cut</option></select>
+        <label class="duck grow" title="How quiet the music gets while you talk">talk to <b id="duckVal">25%</b><input type="range" id="duckLevel" min="0" max="70" value="25"></label>
+      </div>
       <label class="check" title="Listens to your mic LEVEL only (never records) and dips the music while you talk. Wear headphones."><input type="checkbox" id="voiceDuck"> voice auto-duck</label>
       <div class="mic-row">
         <div class="mini-meter" id="micMeter" title="Mic level; the line is the trigger point"><i></i><b id="micThreshMark"></b></div>
@@ -90,9 +83,8 @@
         <button type="button" data-xf="0.5" data-cmd="xfCenter">mid</button>
         <button type="button" data-xf="1" data-cmd="xfB">B ▶</button>
       </div>
+      <button id="panic" class="btn panic" type="button" data-cmd="panic" title="Emergency: fades all music out in 2 seconds">fade all out</button>
     </details>
-
-    <button id="panic" class="btn panic" type="button" data-cmd="panic" title="Emergency: fades all music out in 2 seconds">fade all out</button>
   </section>
 
   <div id="mountB" class="deck-mount"></div>
@@ -102,6 +94,7 @@
 <section class="listpanel">
   <div class="list-head">
     <h2>The list <span id="queueCount" class="count">0</span></h2>
+    <span class="hint-mini">click a song to cue it · ▶ Play next</span>
     <form id="quickAdd" class="quick-add" autocomplete="off">
       <input id="quickUrl" placeholder="Paste a YouTube link and press Enter (or drag one in)" title="Adds the song to the bottom of the list. Title, writer and length fill in by themselves.">
       <button type="submit" class="primary">Add</button>
@@ -129,12 +122,12 @@
 
 <section class="browser">
   <nav class="tabs">
-    <button type="button" data-tab="creators" class="active" title="You, Lance, Lise and Rhonda: channels, pictures, airtime shares">Writers <span id="crTabCount" class="count hot hidden">0</span></button>
+    <button type="button" data-tab="creators" title="You, Lance, Lise and Rhonda: channels, pictures, airtime shares">Writers <span id="crTabCount" class="count hot hidden">0</span></button>
     <button type="button" data-tab="history" title="What played, and credits for your YouTube description">Log &amp; credits</button>
     <button type="button" data-tab="settings" title="Settings, backup, Stream Deck">Settings</button>
   </nav>
 
-  <div class="tab-body" data-body="creators">
+  <div class="tab-body hidden" data-body="creators">
     <form id="crForm" class="cr-form" autocomplete="off">
       <input id="crName" placeholder="Writer name" required>
       <input id="crChannel" placeholder="YouTube channel link, @handle or channel ID (UC…)" title="Used to watch for new uploads. You can find the channel ID in YouTube: channel → About → Share channel → Copy channel ID.">
@@ -273,7 +266,7 @@
     <ol>
       <li><b>Writers</b> (bottom): paste the YouTube channel link for you, Lance, Lise and Rhonda. Their new songs appear above the list — one click adds them.</li>
       <li><b>The list</b> is all the music, in play order. Paste or drag a YouTube link to add one. Drag rows to reorder. <b>✨ Line-up</b> arranges it for you (Undo puts it back).</li>
-      <li>Pick who drives: <b>Manual</b> (you DJ), <b>Assist</b> (lines up the next song and mixes it in if you don't), or <b>Auto</b> (runs the show). Click <b>Manual</b> any time to take over.</li>
+      <li><b>Click any song</b> in the list to cue it up, then press <b>▶ Play next</b> (or Space). Pick who drives: <b>Manual</b> (you DJ), <b>Assist</b> (cues the next song for you and mixes it in if you don't), or <b>Auto</b> (runs the show). <b>Manual</b> takes over any time.</li>
       <li>The <b>Viewer tab</b> opens by itself: click it once, then share <b>that tab</b> in StreamYard with <i>Also share tab audio</i>.</li>
       <li>Talking? <b>🎙 Talk</b> dips the music.</li>
     </ol>
@@ -290,14 +283,8 @@
       <div class="deck-title">
         <div class="t-title" data-r="title"></div>
         <div class="t-artist" data-r="artist"></div>
-        <div class="dk-meta">
-          <span class="deck-state" data-r="state">EMPTY</span>
-          <span class="beat-lights" data-r="lights" title="Beat counter (after TAP + GRID)"><i></i><i></i><i></i><i></i></span>
-          <span class="bpm" data-r="bpm" title="Tempo">— BPM</span>
-          <span class="barpos" data-r="barpos"></span>
-        </div>
       </div>
-      <div class="dk-time" title="Time to the end of the song (or its MIX-OUT mark). Yellow 30 s, red 10 s.">
+      <div class="dk-time" title="Time to the end of the song. Yellow 30 s, red 10 s.">
         <b data-r="remain">-0:00</b>
         <small><span data-r="elapsed">0:00</span> / <span data-r="length">0:00</span></small>
       </div>
@@ -307,20 +294,30 @@
       <div class="markers" data-r="markers"></div>
       <div class="playhead" data-r="playhead"></div>
     </div>
-    <div class="mixout" data-r="mixout"></div>
     <div class="dk-ctrl">
       <button type="button" class="btn play" data-a="play" data-r="playBtn" title="Play / pause">▶</button>
       <button type="button" class="btn cue" data-a="cue" title="CUE: paused = set cue point; playing = back to cue and pause">cue</button>
-      <button type="button" data-a="restart" title="Back to the start">⏮</button>
-      <button type="button" data-a="back" title="Back 10 s">−10</button>
-      <button type="button" data-a="fwd" title="Forward 10 s">+10</button>
-      <button type="button" data-a="next" title="Load the next song from the list onto this deck">next ⤵</button>
+      <span class="deck-state" data-r="state">EMPTY</span>
+      <span class="mixout" data-r="mixout"></span>
       <span class="spacer"></span>
-      <button type="button" data-a="tap" data-r="tapBtn" title="TAP 4+ times to the beat to set the tempo (saved)">tap</button>
-      <button type="button" data-a="grid" title="GRID: press exactly on a '1' to sync the bar counter">grid</button>
-      <button type="button" data-a="more" class="more-btn" title="Hot cues, loops, trim">⋯</button>
+      <span class="beat-lights" data-r="lights" title="Beat counter (after tap + grid)"><i></i><i></i><i></i><i></i></span>
+      <span class="bpm" data-r="bpm" title="Tempo">—</span>
+      <button type="button" data-a="more" class="more-btn" title="Seek, tempo, hot cues, loops, trim">⋯</button>
     </div>
     <div class="dk-more hidden" data-r="more">
+      <div class="pad-group"><span>move</span>
+        <button type="button" data-a="restart" title="Back to the start">⏮</button>
+        <button type="button" data-a="back" title="Back 10 s">−10</button>
+        <button type="button" data-a="fwd" title="Forward 10 s">+10</button>
+        <button type="button" data-a="next" title="Load the next song from the list onto this deck">next ⤵</button>
+      </div>
+      <div class="pad-group"><span>tempo</span>
+        <button type="button" data-a="tap" data-r="tapBtn" title="TAP 4+ times to the beat (saved)">tap</button>
+        <button type="button" data-a="grid" title="GRID: press exactly on a '1'">grid</button>
+        <button type="button" data-a="half" title="Halve tempo">½</button>
+        <button type="button" data-a="dbl" title="Double tempo">×2</button>
+        <span class="barpos" data-r="barpos"></span>
+      </div>
       <div class="pad-group"><span>cues</span>
         <button type="button" data-hc="0" title="Hot cue 1: click to set, click again to jump, right-click clears">1</button>
         <button type="button" data-hc="1" title="Hot cue 2">2</button>
@@ -330,15 +327,13 @@
       <div class="pad-group"><span>loop</span>
         <button type="button" data-a="loopIn" title="Loop start">in</button>
         <button type="button" data-a="loopOut" title="Loop end — starts looping">out</button>
-        <button type="button" data-a="loopBars" data-r="loopBtn" title="Instant 4-bar loop (8 s without tempo). Click again to exit.">4 bar</button>
+        <button type="button" data-a="loopBars" data-r="loopBtn" title="Instant 4-bar loop (8 s without tempo)">4 bar</button>
         <button type="button" data-a="loopExit" title="Leave the loop">exit</button>
       </div>
       <div class="pad-group"><span>trim</span>
         <button type="button" data-a="setIn" title="START: the song begins here next time">start</button>
         <button type="button" data-a="setOut" title="MIX-OUT: mixes leave the song here">mix-out</button>
         <button type="button" data-a="clearTrim" title="Clear start / mix-out">clear</button>
-        <button type="button" data-a="half" title="Halve tempo">½</button>
-        <button type="button" data-a="dbl" title="Double tempo">×2</button>
       </div>
       <div class="load-row">
         <input data-r="url" placeholder="Paste a link to load straight onto this deck…">
@@ -359,7 +354,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=3.1.0"></script>
+<script src="app.js?v=3.2.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

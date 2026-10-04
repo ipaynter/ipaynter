@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.2.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -743,7 +743,7 @@ class Deck {
 
     // beats
     const b = this.beat();
-    r.bpm.textContent = t?.bpm ? `${t.bpm.toFixed(1)} BPM` : '— BPM';
+    r.bpm.textContent = t?.bpm ? `${Math.round(t.bpm)} bpm` : '';
     r.barpos.textContent = b ? `BAR ${b.bar}.${b.inBar + 1} · ${b.barsLeft} bars left` : (t?.bpm ? 'press GRID on a "1"' : (t ? 'TAP to set tempo' : ''));
     const lights = r.lights.children;
     for (let i = 0; i < 4; i++) lights[i].classList.toggle('on', !!(b && playing && b.inBar === i && b.frac < 0.4));
@@ -875,12 +875,39 @@ function mixTo(target, secs = S.cfg.fadeSec, { stopOld = true } = {}) {
   tween('xf', S.xf, to, ms, v => { S.xf = v; syncXfUI(); applyVolumes(); }, () => {
     S.transitioning = false;
     if (stopOld && from.isPlaying()) from.pause();
-    renderAll();
+    renderAll(); renderQueue();
   });
   return true;
 }
 
 function mixNow() { mixTo(other(liveDeck())); }
+
+// ▶ Play next: the one button for a simple manual show.
+// Nothing playing → start the cued (or next) song. Playing → bring in the cued song, or the next one in the list.
+function playNext() {
+  const live = liveDeck(), free = other(live);
+  const anyPlaying = live.isPlaying() || free.isPlaying();
+  if (!anyPlaying) {
+    const d = free.track && !free.played && !free.errored ? free : live;
+    if (!d.track || d.played || d.errored) { const t = dequeue(); if (!t) { toast('The list is empty — add a song', 'bad'); return; } d.load(t, true); }
+    setXf(d.id === 'A' ? 0 : 1);
+    d.play(); renderAll(); renderQueue();
+    return;
+  }
+  if (!live.isPlaying() && free.isPlaying()) { mixTo(free); return; }
+  if (!free.track || free.played || free.errored) {
+    const t = dequeue(); if (!t) { toast('Nothing left in the list', 'bad'); return; }
+    free.load(t, true);
+  }
+  mixTo(free); renderQueue();
+}
+
+// Click a song in the list: cue it as "up next" on the free deck.
+async function cueNext(t) {
+  const free = other(liveDeck());
+  const d = free.isPlaying() && !liveDeck().isPlaying() ? liveDeck() : free;
+  if (await d.userLoad(t)) { renderQueue(); toast(`Up next: "${t.title || t.videoId}" — press ▶ Play next`); }
+}
 
 // The one list is S.library, in play order. "Next" = first song not yet played this show and not on a deck.
 function playedThisShow() {
@@ -1521,7 +1548,7 @@ const COMMANDS = {
   nextB: ['Load next from queue → B', 's', () => decks.B.act_next()],
   tapA: ['Tap tempo Deck A', 'e', () => decks.A.act_tap()],
   tapB: ['Tap tempo Deck B', 'r', () => decks.B.act_tap()],
-  mix: ['MIX ⇄ to the other deck (fade time)', ' ', mixNow],
+  mix: ['▶ Play next (mix in the cued or next song)', ' ', playNext],
   xfA: ['Fade crossfader to A (keep B playing)', 'z', () => mixTo(decks.A, S.cfg.fadeSec, { stopOld: false })],
   xfB: ['Fade crossfader to B (keep A playing)', 'x', () => mixTo(decks.B, S.cfg.fadeSec, { stopOld: false })],
   xfCenter: ['Crossfader to center', 'c', () => setXf(0.5)],
@@ -1652,7 +1679,7 @@ function renderQueue() {
     const deck = onA ? decks.A : onB ? decks.B : null;
     let st = '', tag = '';
     if (deck && deck.isPlaying()) { st = 'live'; tag = `▶ ON ${deck.id}`; }
-    else if (deck) { st = 'cued'; tag = `ON ${deck.id}`; }
+    else if (deck) { st = 'cued'; tag = deck === other(liveDeck()) || !liveDeck().isPlaying() ? 'UP NEXT' : `ON ${deck.id}`; }
     else if (t.flag) { st = 'flag'; tag = '⚠ blocked'; }
     else if (played.has(t.videoId)) { st = 'played'; tag = '✓ played'; }
     else if (nxt === t) { st = 'next'; tag = 'NEXT'; }
@@ -1694,7 +1721,8 @@ function updateQueueEtas() {
 function initQueueUI() {
   const list = $('#queueList');
   list.addEventListener('click', async e => {
-    const b = e.target.closest('button[data-q]'); if (!b) return;
+    const b = e.target.closest('button[data-q]');
+    if (!b) { const li = e.target.closest('li[data-id]'); const t = li && byId(li.dataset.id); if (t && !e.target.closest('a,input,select')) cueNext(t); return; }
     const t = byId(b.closest('li').dataset.id); if (!t) return;
     const act = b.dataset.q;
     if (act === 'A' || act === 'B') decks[act].userLoad(t);
@@ -1706,7 +1734,6 @@ function initQueueUI() {
       save.library(); renderQueue(); renderCreators();
     }
   });
-  list.addEventListener('dblclick', e => { const li = e.target.closest('li'); if (li && !e.target.closest('button')) { const t = byId(li.dataset.id); if (t) other(liveDeck()).userLoad(t); } });
   list.addEventListener('dragstart', e => {
     const li = e.target.closest('li'); if (!li) return;
     drag = { id: li.dataset.id };
@@ -2372,7 +2399,7 @@ function initMixerUI() {
   $('#fadeSec').onchange = e => { S.cfg.fadeSec = clamp(+e.target.value || 0, 0, 30); e.target.value = S.cfg.fadeSec; save.cfg(); };
   $('#snapBars').onchange = e => { S.cfg.snapBars = e.target.checked; save.cfg(); };
   $$('.xf-snap button').forEach(b => { b.onclick = () => setXf(+b.dataset.xf); });
-  $('#mixNow').onclick = mixNow;
+  $('#mixNow').onclick = playNext;
   $$('.mode [data-mode]').forEach(b => { b.onclick = () => setMode(b.dataset.mode); b.classList.toggle('on', b.dataset.mode === S.cfg.mode); });
   $('#talk').onclick = () => setTalk(!S.talk);
   $('#onair').onclick = toggleOnAir;
@@ -2394,8 +2421,10 @@ function initMixerUI() {
 
 /* ---------------- tabs ---------------- */
 
-function openTab(name) {
+function openTab(name, toggle = false) {
   if (name === 'queue' || name === 'library') { $('.listpanel').scrollIntoView({ behavior: 'smooth' }); return; }
+  const btn = $(`.tabs button[data-tab="${name}"]`);
+  if (toggle && btn?.classList.contains('active')) { btn.classList.remove('active'); $$('.tab-body').forEach(b => b.classList.add('hidden')); return; }
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $$('.tab-body').forEach(b => b.classList.toggle('hidden', b.dataset.body !== name));
 }
@@ -2481,7 +2510,7 @@ function boot() {
   decks.B = new Deck('B', $('#mountB'));
   Tip.init();
   initMixerUI(); initQueueUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
-  $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab); });
+  $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab, true); });
   renderEverything(); renderVersion(); syncXfUI(); applyVolumes();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
 

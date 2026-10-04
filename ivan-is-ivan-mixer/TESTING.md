@@ -72,7 +72,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 - [ ] 5.1 Load a different song on Deck B.
 - [ ] 5.2 The Tempo box in the mixer shows both BPMs, once B has been tapped too.
-- [ ] 5.3 Press **MIX ⇄**. A fades out, B fades in, and A stops.
+- [ ] 5.3 Click a song in the list: it shows **UP NEXT**. Press **▶ Play next**. A fades out, B fades in, and A stops.
 - [ ] 5.4 Move the crossfader slowly by hand. Both songs blend smoothly.
 - [ ] 5.5 While B is playing on air, click **A** on a library song for Deck B. It must **ask first** before replacing, and the music keeps playing while it asks.
 
@@ -124,7 +124,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 10.1 Mixer **Settings & Stream Deck** tab: click **Copy** next to "Play / pause Deck A".
 - [ ] 10.2 Stream Deck app: drag **Website** onto a key, paste the URL, tick **GET request in background**.
 - [ ] 10.3 Click into StreamYard so the mixer is in the background, then press the key. Deck A plays or pauses.
-- [ ] 10.4 Repeat for MIX ⇄, Auto DJ, TALK, Viewer page, Full screen and Fade all out.
+- [ ] 10.4 Repeat for Play next, Auto DJ, TALK, Viewer page, Full screen and Fade all out.
 
 ## 11. After the show
 
