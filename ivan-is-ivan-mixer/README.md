@@ -17,7 +17,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Daily flow
 
-1. **Creators tab:** add your four music writers (name, YouTube channel, color). New uploads show up on their own. Click **✓ Approve** or **Ignore**.
+1. **Creators tab:** add your four music writers, yourself included (name, YouTube channel, color, **Share %**). Give your own songs a bigger share, e.g. you 40, the others 20 each. New uploads show up on their own. Click **✓ Approve** or **Ignore**.
 2. **Library:** for any other approved link, paste it and press **Fetch info**. Add BPM and energy if you know them.
 3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
 4. **Queue:** drag songs in, or use the **Smart Next** cards.
@@ -52,14 +52,15 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 - **Smart fill:** when the queue runs dry, Auto DJ adds the best Smart Next pick, so there's no dead air.
 
 **Smart Next** suggests the next 3 songs and shows the reasons:
-- **Fair rotation:** creators who haven't aired yet, or not for a while, come first. The same creator twice in a row is avoided.
+- **Airtime shares:** the writer furthest below their Share % comes first. With you at 40 and three writers at 20, a show plays roughly 2 of your songs for every 1 of each other writer, spread out rather than in blocks.
 - **Tempo match:** songs with a close BPM, counting half and double time.
 - **Energy flow:** stays within one energy step.
 - **New releases:** gets a boost until the first play.
 - Never repeats a song within the same show.
 
 **Creators**
-- Each creator gets a card with their color, number of songs, plays and airtime this show, and a fair-share bar. This keeps airtime fair between your four writers.
+- Each writer gets a card with their color, number of songs and plays. It also shows **Target %** against **Now %** for this show, a bar with a white target line, and a status: on target, behind or ahead.
+- Shares are relative, so 40/20/20/20 and 2/1/1/1 mean the same thing. Change them anytime with ✎.
 - **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
 - Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
 

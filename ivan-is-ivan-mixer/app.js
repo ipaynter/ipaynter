@@ -812,6 +812,13 @@ function setDeckVol(id, v) { S.cfg['vol' + id] = clamp(Math.round(v), 0, 100); $
 // Start of the current show (ON AIR), or the last 3 hours.
 const showStart = () => S.onAirAt || (Date.now() - 3 * 3600e3);
 
+// Each writer's target share of music airtime. Shares are relative (40/20/20/20 = 40%, 20%, …).
+const shareOf = c => clamp(Math.round(+c.share || 25), 1, 100);
+function targetShare(c) {
+  const sum = S.creators.reduce((s, x) => s + shareOf(x), 0) || 1;
+  return shareOf(c) / sum;
+}
+
 // Airtime per creator this show: { creatorId: {plays, secs, lastAt} }
 function airStats() {
   const since = showStart(), st = {};
@@ -821,7 +828,7 @@ function airStats() {
     const c = creatorOf(t) || creatorById(h.creatorId);
     if (!c) continue;
     const s = st[c.id] || (st[c.id] = { plays: 0, secs: 0, lastAt: 0 });
-    s.plays++; s.secs += t ? trackLen(t) : 0; s.lastAt = Math.max(s.lastAt, h.at);
+    s.plays++; s.secs += (t && trackLen(t)) || 180; // unknown length counts as 3 min s.lastAt = Math.max(s.lastAt, h.at);
   }
   return st;
 }
@@ -839,7 +846,9 @@ function suggest(n = 3, { creatorId = null } = {}) {
   const live = liveDeck();
   const ref = (live?.isPlaying() ? live.track : null) || other(live)?.track || live?.track || null;
   const lastCreator = S.history[0] ? (creatorOf(byVid(S.history[0].videoId)) || creatorById(S.history[0].creatorId))?.id : null;
-  const st = airStats(), now = Date.now();
+  const st = airStats();
+  const total = Object.values(st).reduce((a, x) => a + x.secs, 0);
+  const pct = v => Math.round(v * 100) + '%';
   return S.library
     .filter(t => !t.flag && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
     .map(t => {
@@ -848,14 +857,13 @@ function suggest(n = 3, { creatorId = null } = {}) {
       if (playedNow.has(t.videoId)) score -= 100;
       const c = creatorOf(t);
       if (c && S.creators.length > 1 && !creatorId) {
-        const s = st[c.id];
-        if (!s) { score += 25; why.push(`${c.name} hasn't aired yet`); }
-        else {
-          const mins = (now - s.lastAt) / 60000;
-          score += Math.min(mins, 30) * 0.8;
-          if (mins > 15) why.push(`${c.name}: ${Math.round(mins)} min since last`);
-        }
-        if (c.id === lastCreator) score -= 20;
+        // Whoever is furthest below their target share goes first.
+        const tgt = targetShare(c);
+        const act = total ? (st[c.id]?.secs || 0) / total : 0;
+        score += (tgt - act) * 80;
+        if (!st[c.id]) why.push(`${c.name} hasn't aired yet`);
+        else if (tgt - act > 0.05) why.push(`${c.name} behind: ${pct(act)} of ${pct(tgt)}`);
+        if (c.id === lastCreator) score -= 15 * (1 - tgt); // big shares may run back-to-back
       }
       if (t.isNew) { score += 18; why.push('NEW release'); }
       if (ref?.bpm && t.bpm && ref !== t) {
@@ -995,11 +1003,16 @@ function renderCreators() {
     const songs = S.library.filter(t => creatorOf(t)?.id === c.id).length;
     const waiting = S.inbox.filter(i => i.creatorId === c.id).length;
     const share = Math.round((s.secs / total) * 100);
+    const tgt = Math.round(targetShare(c) * 100);
+    const gap = share - tgt;
+    const status = !s.plays ? 'not aired yet' : Math.abs(gap) <= 5 ? 'on target' : gap < 0 ? `${-gap}% behind` : `${gap}% ahead`;
+    const cls = !s.plays || Math.abs(gap) <= 5 ? '' : gap < 0 ? 'behind' : 'ahead';
     return `<div class="cr-card" style="--cc:${safeColor(c.color)}" data-id="${c.id}">
       <div class="cr-top"><span class="cr-dot"></span><b>${esc(c.name)}</b>${waiting ? `<span class="badge">${waiting} new</span>` : ''}</div>
       <div class="cr-meta">${c.channelId ? `<a href="https://www.youtube.com/channel/${esc(c.channelId)}" target="_blank" rel="noopener" title="Open their channel">channel linked ✓</a>` : '<span class="bad">no channel linked</span>'} · ${songs} song${songs === 1 ? '' : 's'}</div>
-      <div class="cr-air" title="Share of music airtime this show: ${share}%"><i style="width:${share}%"></i></div>
-      <div class="cr-stats">${s.plays} play${s.plays === 1 ? '' : 's'} · ${fmt(s.secs)} on air · ${share}%${s.lastAt ? ` · last ${ago(s.lastAt)}` : ''}</div>
+      <div class="cr-target"><span>Target <b>${tgt}%</b></span><span>Now <b>${share}%</b></span><span class="cr-status ${cls}">${status}</span></div>
+      <div class="cr-air" title="Airtime this show: ${share}% (target ${tgt}%). The white line is the target."><i style="width:${share}%"></i><b style="left:${tgt}%"></b></div>
+      <div class="cr-stats">${s.plays} play${s.plays === 1 ? '' : 's'} · ${fmt(s.secs)} on air${s.lastAt ? ` · last ${ago(s.lastAt)}` : ''}</div>
       <div class="cr-acts">
         <button type="button" data-c="smart" title="Queue the best song from this creator">+ Queue a song</button>
         <button type="button" data-c="check" title="Check this creator for new uploads">🔔</button>
@@ -1054,6 +1067,7 @@ function initCreatorsUI() {
   const resetForm = () => {
     crEditId = null; $('#crForm').reset();
     $('#crColor').value = DEFAULT_COLORS[S.creators.length % DEFAULT_COLORS.length];
+    $('#crShare').value = 25;
     $('#crSave').textContent = 'Add creator'; $('#crCancel').classList.add('hidden');
   };
   resetForm();
@@ -1066,9 +1080,10 @@ function initCreatorsUI() {
     try { channelId = await Creators.resolve($('#crChannel').value); }
     catch (err) { toast(err.message, 'bad'); return; }
     const color = safeColor($('#crColor').value);
+    const share = clamp(Math.round(+$('#crShare').value || 25), 1, 100);
     let c = crEditId && creatorById(crEditId);
-    if (c) Object.assign(c, { name, channelId, color });
-    else { c = { id: uid(), name, channelId, color }; S.creators.push(c); }
+    if (c) Object.assign(c, { name, channelId, color, share });
+    else { c = { id: uid(), name, channelId, color, share }; S.creators.push(c); }
     save.creators(); resetForm(); renderCreators(); renderLibrary(); renderQueue();
     toast(`Creator "${name}" saved`, 'good');
     if (channelId) { try { const n = await Creators.check(c); renderCreators(); renderInbox(); if (n) toast(`${n} upload(s) from ${name} waiting for approval`, 'good'); } catch (err) { toast(err.message, 'bad'); } }
@@ -1085,7 +1100,7 @@ function initCreatorsUI() {
       try { const n = await Creators.check(c); renderCreators(); renderInbox(); toast(n ? `${n} new from ${c.name}` : `Nothing new from ${c.name}`); }
       catch (err) { toast(err.message, 'bad'); }
     } else if (a === 'edit') {
-      crEditId = c.id; $('#crName').value = c.name; $('#crChannel').value = c.channelId || ''; $('#crColor').value = safeColor(c.color);
+      crEditId = c.id; $('#crName').value = c.name; $('#crChannel').value = c.channelId || ''; $('#crColor').value = safeColor(c.color); $('#crShare').value = shareOf(c);
       $('#crSave').textContent = 'Save creator'; $('#crCancel').classList.remove('hidden'); $('#crName').focus();
     } else if (a === 'del' && await ask(`Remove creator "${c.name}"? Their songs stay in the library.`, 'Remove')) {
       S.creators = S.creators.filter(x => x !== c);
@@ -1707,7 +1722,7 @@ async function importData(file) {
       const chan = /^UC[\w-]{22}$/.test(raw.channelId || '') ? raw.channelId : '';
       const existing = S.creators.find(c => (chan && c.channelId === chan) || c.name.toLowerCase() === String(raw.name).toLowerCase());
       if (existing) { crMap[raw.id] = existing.id; return; }
-      const c = { id: uid(), name: String(raw.name), channelId: chan, color: safeColor(raw.color) };
+      const c = { id: uid(), name: String(raw.name), channelId: chan, color: safeColor(raw.color), share: clamp(Math.round(+raw.share || 25), 1, 100) };
       S.creators.push(c); crMap[raw.id] = c.id;
     });
     const idMap = {};

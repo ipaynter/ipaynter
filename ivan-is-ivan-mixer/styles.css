@@ -514,3 +514,15 @@ body.staged .toasts, body.staged .tip, body.staged .dead-air { display: none !im
   .beatbar { flex-wrap: wrap; }
   .time-box.big span { font-size: 24px; }
 }
+
+/* airtime targets */
+.cr-share { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.cr-share input { width: 60px; text-align: center; }
+.cr-target { display: flex; gap: 10px; font-size: 12px; color: var(--dim); align-items: center; }
+.cr-target b { color: var(--text); }
+.cr-status { margin-left: auto; font-weight: 800; color: var(--green); }
+.cr-status.behind { color: var(--yellow); }
+.cr-status.ahead { color: var(--b); }
+.cr-air { position: relative; height: 8px; overflow: visible; }
+.cr-air i { border-radius: 3px; }
+.cr-air b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fff; }
