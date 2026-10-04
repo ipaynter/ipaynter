@@ -100,6 +100,30 @@ try { $listener.Start() } catch {
     # Already running (e.g. a second double-click)? Then just open it.
     $running = $null
     try { $running = Invoke-RestMethod -Uri ($url + 'api/info') -TimeoutSec 3 } catch {}
+    if ($running -and $running.version -and $running.version -ne $version) {
+        # An OLDER (or different) mixer is still running from another folder. Stop it, then start this one.
+        Write-Host "An older mixer (v$($running.version)) is still running. Closing it and starting v$version..." -ForegroundColor Yellow
+        Write-Log "Different version running (v$($running.version)); stopping it"
+        $old = @()
+        try {
+            $old = @(Get-CimInstance Win32_Process -ErrorAction Stop |
+                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'serve\.ps1|serve\.py' } | ForEach-Object { $_.ProcessId })
+        } catch {
+            # no CIM (PowerShell 7 off Windows): Process.CommandLine works there instead
+            $old = @(Get-Process | Where-Object { $_.Id -ne $PID -and $_.CommandLine -match 'serve\.ps1|serve\.py' } | ForEach-Object { $_.Id })
+        }
+        foreach ($id in $old) { Write-Log "Stopping old mixer process $id"; Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Seconds 2
+        $listener = New-Object System.Net.HttpListener
+        $listener.Prefixes.Add($url)
+        try { $listener.Start(); $running = $null } catch {
+            Write-Host "The old mixer (v$($running.version)) would not close." -ForegroundColor Red
+            Write-Host 'Close every black "Ivan is Ivan" window (or restart the computer), then try again.'
+            Write-Log 'Old mixer would not close'
+            Read-Host 'Press Enter to close'
+            exit 1
+        }
+    }
     if ($running -and $running.version) {
         Write-Host "The mixer (v$($running.version)) is already running. Opening it in Chrome." -ForegroundColor Cyan
         Write-Log 'Already running; opened it'
@@ -107,10 +131,12 @@ try { $listener.Start() } catch {
         Start-Sleep -Seconds 3
         exit 0
     }
+    if (-not $listener.IsListening) {
     Write-Host "Could not start the mixer on port $port." -ForegroundColor Red
     Write-Host "Reason: $why" -ForegroundColor Red
     Write-Host 'If another program uses port 8765, close it, or restart the computer and try again.'
     exit 1
+    }
 }
 
 Write-Host "Ivan is Ivan - Live Mixer v$version running at $url" -ForegroundColor Cyan
