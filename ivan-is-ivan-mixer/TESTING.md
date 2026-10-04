@@ -38,6 +38,13 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 3.3 Pick the writer from the list and click **Add to approved library**.
 - [ ] 3.4 Paste a link that is NOT in the library into Deck A and press LOAD. It must refuse and send you to the library.
 
+## 3a. Drag and paste links
+
+- [ ] 3a.1 In another Chrome tab, open a writer's song on YouTube. Drag the link from the address bar onto **Deck A**. It loads, and the title and writer fill in.
+- [ ] 3a.2 Drag a song link onto the **Queue**. It joins the queue with its picture.
+- [ ] 3a.3 Copy a YouTube link (Ctrl+C), click an empty spot in the mixer, then press **Ctrl+V**. It's queued.
+- [ ] 3a.4 Drop the same link again. The library count doesn't go up.
+
 ## 3b. Import your Rundown music list
 
 - [ ] 3b.1 **Approved Library → 📥 Import list → Choose file…** → pick `Downloads\Rundown Console.html`.
@@ -134,7 +141,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 ---
 
-**Result:** ___ of 15 sections passed.  Date: ________
+**Result:** ___ of 16 sections passed.  Date: ________
 
 Failures (step number + what happened):
 

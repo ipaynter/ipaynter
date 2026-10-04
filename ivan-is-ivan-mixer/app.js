@@ -291,11 +291,18 @@ class Deck {
       this.seek(((e.clientX - rect.left) / rect.width) * this.dur);
     });
     this.r.url.addEventListener('keydown', e => { if (e.key === 'Enter') this.act_load(); });
-    this.el.addEventListener('dragover', e => { if (drag) { e.preventDefault(); this.el.classList.add('drop'); } });
+    this.el.addEventListener('dragover', e => { if (drag || linkDrag(e)) { e.preventDefault(); this.el.classList.add('drop'); } });
     this.el.addEventListener('dragleave', e => { if (!this.el.contains(e.relatedTarget)) this.el.classList.remove('drop'); });
     this.el.addEventListener('drop', e => {
       e.preventDefault(); this.el.classList.remove('drop');
-      if (!drag) return;
+      if (!drag) {
+        // A YouTube link dragged in from another tab or page: first song to this deck, the rest to the queue.
+        const tracks = ingestLinks(droppedText(e));
+        if (!tracks.length) return;
+        this.userLoad(tracks[0]);
+        tracks.slice(1).forEach(t => addToQueue(t.id));
+        return;
+      }
       const { id, qid } = drag; drag = null;
       this.userLoad(byId(id)).then(ok => { if (ok && qid) removeFromQueue(qid); });
     });
@@ -473,8 +480,8 @@ class Deck {
     let t = byVid(vid);
     if (!t) {
       if (S.cfg.approvedOnly) {
-        toast('Not in your approved library yet — add it first', 'bad');
-        openTab('library'); resetLibForm(); $('#libUrl').value = raw; fetchInfo();
+        ask('This song is not in your approved library yet. Add it (you have the creator\'s permission) and load it?', 'Add & load')
+          .then(ok => { if (ok) { const [nt] = ingestLinks('https://youtu.be/' + vid); if (nt) this.userLoad(nt); } });
         return;
       }
       t = { id: 'tmp-' + vid, videoId: vid, title: '', artist: '', license: 'NOT IN LIBRARY' };
@@ -693,7 +700,10 @@ function probeLength(t) {
     if (p?.duration) {
       t.duration = p.duration;
       if (!t.title && p.title) t.title = p.title;
-      if (!t.artist && !creatorOf(t) && p.author) t.artist = p.author;
+      if (!creatorOf(t) && p.author) {
+        const c = matchCreator(p.author);
+        if (c) { t.creatorId = c.id; t.artist = c.name; } else if (!t.artist) t.artist = p.author;
+      }
     } else if (p?.error) t.flag = 'will not play in embed (error ' + p.error + ')';
     save.library(); renderLibrary(); renderQueue();
   });
@@ -1509,13 +1519,19 @@ function initQueueUI() {
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', li.dataset.id);
   });
   list.addEventListener('dragover', e => {
-    if (!drag) return; e.preventDefault();
+    if (!drag && !linkDrag(e)) return; e.preventDefault();
     $$('li.dragover', list).forEach(x => x.classList.remove('dragover'));
     e.target.closest('li')?.classList.add('dragover');
   });
   list.addEventListener('drop', e => {
-    if (!drag) return; e.preventDefault();
+    if (!drag && !linkDrag(e)) return; e.preventDefault();
     const target = e.target.closest('li');
+    if (!drag) {
+      let at = target ? S.queue.findIndex(q => q.qid === target.dataset.qid) : S.queue.length;
+      if (at < 0) at = S.queue.length;
+      ingestLinks(droppedText(e)).forEach(t => addToQueue(t.id, at++));
+      return;
+    }
     let index = target ? S.queue.findIndex(q => q.qid === target.dataset.qid) : S.queue.length;
     if (drag.qid) {
       const from = S.queue.findIndex(q => q.qid === drag.qid);
@@ -1528,8 +1544,12 @@ function initQueueUI() {
   });
   // allow dropping library rows on the empty area around the list
   const body = $('[data-body="queue"]');
-  body.addEventListener('dragover', e => { if (drag && !drag.qid) e.preventDefault(); });
-  body.addEventListener('drop', e => { if (drag && !drag.qid && !e.target.closest('#queueList')) { e.preventDefault(); addToQueue(drag.id); drag = null; } });
+  body.addEventListener('dragover', e => { if ((drag && !drag.qid) || linkDrag(e)) e.preventDefault(); });
+  body.addEventListener('drop', e => {
+    if (e.target.closest('#queueList')) return;
+    if (drag && !drag.qid) { e.preventDefault(); addToQueue(drag.id); drag = null; }
+    else if (!drag && linkDrag(e)) { e.preventDefault(); ingestLinks(droppedText(e)).forEach(t => addToQueue(t.id)); }
+  });
 
   $('#qClear').onclick = async () => { if (S.queue.length && await ask('Clear the whole queue?', 'Clear')) { S.queue = []; save.queue(); renderQueue(); } };
   $('#qShuffle').onclick = () => {
@@ -1731,6 +1751,64 @@ function initLibraryUI() {
     toast('Done', 'good');
   };
 }
+
+/* ---------------- drag & paste YouTube links straight in ---------------- */
+
+const linkDrag = e => !drag && [...(e.dataTransfer?.types || [])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'text/html');
+function droppedText(e) {
+  const dt = e.dataTransfer;
+  return [dt.getData('text/uri-list'), dt.getData('text/plain'), dt.getData('text/html')].filter(Boolean).join('\n');
+}
+
+// Turns any text with YouTube links into library tracks (adding the new ones: you vouch for what you drop in).
+function ingestLinks(text) {
+  const vids = [];
+  for (const u of ytUrls(String(text || '').replace(/&amp;/g, '&'))) {
+    const v = parseVideoId(u.replace(/[).\]]+$/, ''));
+    if (v && !vids.includes(v)) vids.push(v);
+  }
+  if (!vids.length) { toast('No YouTube link found in what you dropped or pasted', 'bad'); return []; }
+  let added = 0;
+  const tracks = vids.map(vid => {
+    let t = byVid(vid);
+    if (!t) {
+      t = { id: uid(), videoId: vid, url: 'https://www.youtube.com/watch?v=' + vid, title: '', artist: '',
+        license: 'Full permission — creator', approvedOn: today(), tags: '', notes: '', duration: 0, plays: 0, addedAt: Date.now() };
+      S.library.push(t); added++;
+      fillDetails(t);
+    }
+    return t;
+  });
+  S.inbox = S.inbox.filter(i => !vids.includes(i.videoId));
+  save.library(); save.inbox(); renderLibrary(); renderInbox(); renderCreators();
+  toast(added ? `Added ${added} new song${added === 1 ? '' : 's'} to your library` : `${tracks.length} song${tracks.length === 1 ? '' : 's'} from your library`, 'good');
+  return tracks;
+}
+
+// Title, creator and length for a link added by drag or paste.
+async function fillDetails(t) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(t.url)}`);
+    if (r.ok) {
+      const j = await r.json();
+      if (!t.title) t.title = j.title || '';
+      const c = matchCreator(j.author_name);
+      if (c) { t.creatorId = c.id; t.artist = c.name; } else if (!t.artist) t.artist = j.author_name || '';
+      save.library(); renderLibrary(); renderQueue(); renderAll();
+    }
+  } catch { /* the player look-up below still fills it in */ }
+  probeLength(t);
+}
+
+document.addEventListener('paste', e => {
+  if (e.target.closest('input, textarea, select') || !$('#imp').classList.contains('hidden')) return;
+  const text = e.clipboardData?.getData('text') || '';
+  if (!ytUrls(text).length) return;
+  e.preventDefault();
+  const tracks = ingestLinks(text);
+  tracks.forEach(t => addToQueue(t.id));
+  if (tracks.length) toast(`Queued ${tracks.length} song${tracks.length === 1 ? '' : 's'}`, 'good');
+});
 
 /* ---------------- import a music list (Rundown console, spreadsheet, text) ---------------- */
 

@@ -25,6 +25,16 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 6. Press **VIEWER PAGE** (V). This is the page you share in StreamYard: the full video, nothing else but a small creator badge. Press **F** for full screen.
 7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
 
+## Adding music: just drag or paste the link
+
+- **Drag** a YouTube link from YouTube, your Rundown page or anywhere else:
+  - onto **Deck A or B** to load it there, or
+  - onto the **Queue** to line it up (drop it between songs to place it).
+- **Ctrl+V** anywhere in the mixer adds a copied YouTube link to the queue.
+- **Paste** into a deck's link box and press LOAD. It asks once, then adds and loads it.
+
+A new link is added to your approved library by itself, as you vouch for what you drop in. Title, writer (matched from the YouTube channel name) and length fill in within seconds. The same link is never added twice.
+
 ## Bring in your existing music list (Rundown console)
 
 1. Have your Rundown console ready in **one** of these ways:
