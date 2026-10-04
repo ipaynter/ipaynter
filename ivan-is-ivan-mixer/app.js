@@ -1006,7 +1006,7 @@ function renderCreators() {
         <button type="button" data-c="edit" title="Edit">✎</button>
         <button type="button" data-c="del" title="Remove creator (their songs stay in the library)">✕</button>
       </div></div>`;
-  }).join('') || '<div class="dim">Add your creators above. Each gets a color, fair-airtime tracking and alerts when they upload something new.</div>';
+  }).join('') || '<div class="dim">Add your four music writers above. Each gets a color, fair-airtime tracking and alerts when they upload something new.</div>';
 }
 
 function renderInbox() {

@@ -17,7 +17,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Daily flow
 
-1. **Creators tab:** add each creator (name, YouTube channel, color). New uploads show up on their own. Click **✓ Approve** or **Ignore**.
+1. **Creators tab:** add your four music writers (name, YouTube channel, color). New uploads show up on their own. Click **✓ Approve** or **Ignore**.
 2. **Library:** for any other approved link, paste it and press **Fetch info**. Add BPM and energy if you know them.
 3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
 4. **Queue:** drag songs in, or use the **Smart Next** cards.
@@ -59,7 +59,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 - Never repeats a song within the same show.
 
 **Creators**
-- Each creator gets a card with their color, number of songs, plays and airtime this show, and a fair-share bar. This lets you keep things even between the 4 of you.
+- Each creator gets a card with their color, number of songs, plays and airtime this show, and a fair-share bar. This keeps airtime fair between your four writers.
 - **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
 - Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
 
