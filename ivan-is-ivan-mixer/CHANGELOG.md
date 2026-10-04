@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.2.1 — 2026-10-04 — Fix: old version kept showing
-Commit: `pending`
+Commit: `ead7ac9`
 - **Fixed:** if an older mixer was still running (an old black window, for example v2.5.2), starting the new one just opened the old one. Now the new version closes the old one by itself and starts. A second click on the same version still just opens it.
 - If the old one won't close, it says so: close every black "Ivan is Ivan" window, or restart the computer.
 
