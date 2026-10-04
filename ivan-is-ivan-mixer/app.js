@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.6.1';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -528,6 +528,10 @@ class Deck {
         if (vd.author && !this.track.artist) this.track.artist = vd.author;
         this.persist();
       }
+      if (this.track?.flag) { // it plays now (e.g. the owner switched embedding back on)
+        delete this.track.flag; this.persist();
+        toast(`"${this.track.title || this.track.videoId}" plays again — ⚠ cleared`, 'good');
+      }
       if (!this.played) { this.played = true; logPlay(this); }
       if (!this.wantPlay) this.wantPlay = true; // started from somewhere else
     }
@@ -690,9 +694,10 @@ const Probe = {
   },
   state(s) {
     if (!this.busy || (s !== 1 && s !== 3 && s !== 5)) return;
+    const vd = this.player.getVideoData?.() || {};
+    if (vd.video_id && vd.video_id !== this.busy.videoId) return; // a late signal about the previous song
     const d = this.player.getDuration();
     if (d > 0) {
-      const vd = this.player.getVideoData?.() || {};
       this.player.stopVideo();
       this.finish({ duration: d, title: vd.title, author: vd.author });
     }
@@ -1703,6 +1708,7 @@ function renderLibrary() {
         <button type="button" data-l="B" class="lb" title="Load onto deck B">B</button>
         <button type="button" data-l="q" title="Add to the queue">+Q</button>
         <button type="button" data-l="auto" class="${t.noAuto ? 'off' : ''}" title="${t.noAuto ? 'Manual only: Smart DJ will never pick this song. Click to allow.' : 'Smart DJ may pick this song. Click to make it manual only.'}">🤖</button>
+        ${t.flag ? '<button type="button" data-l="recheck" class="recheck" title="Check again whether this song plays in the mixer (after embedding was switched on)">↻</button>' : ''}
         <button type="button" data-l="open" title="Open on YouTube">↗</button>
         <button type="button" data-l="edit" title="Edit details, BPM and energy">✎</button>
         <button type="button" data-l="del" title="Remove from the approved library">✕</button>
@@ -1728,6 +1734,7 @@ function initLibraryUI() {
     const a = b.dataset.l;
     if (a === 'A' || a === 'B') decks[a].userLoad(t);
     else if (a === 'q') { addToQueue(t.id); toast(`Queued "${t.title || t.videoId}"`); }
+    else if (a === 'recheck') { recheckSongs([t]); }
     else if (a === 'auto') {
       if (t.noAuto) delete t.noAuto; else t.noAuto = true;
       save.library(); renderLibrary(); renderSmart();
@@ -1746,6 +1753,11 @@ function initLibraryUI() {
     drag = { id: tr.dataset.id };
     e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', tr.dataset.id);
   });
+  $('#libRecheck').onclick = () => {
+    const flagged = S.library.filter(t => t.flag);
+    if (!flagged.length) { toast('No ⚠ songs — everything plays', 'good'); return; }
+    recheckSongs(flagged);
+  };
   $('#libProbeAll').onclick = async () => {
     if (!S.ytReady) { toast('YouTube player not ready yet', 'bad'); return; }
     const missing = S.library.filter(t => !t.duration);
@@ -1759,6 +1771,24 @@ function initLibraryUI() {
     }
     toast('Done', 'good');
   };
+}
+
+// Test songs again (e.g. after the owner switched "Allow embedding" on) and clear the ⚠ on the ones that play.
+async function recheckSongs(list) {
+  if (!S.ytReady) { toast('YouTube player not ready yet', 'bad'); return; }
+  toast(`Checking ${list.length} song${list.length === 1 ? '' : 's'} again…`);
+  let fixed = 0;
+  for (const t of list) {
+    const p = await Probe.get(t.videoId);
+    if (p?.duration) {
+      t.duration = p.duration;
+      if (t.flag) { delete t.flag; fixed++; }
+    } else if (p?.error) t.flag = 'will not play in embed (error ' + p.error + ')';
+    save.library(); renderLibrary(); renderQueue(); renderSmart();
+  }
+  const still = list.filter(t => t.flag).length;
+  toast(fixed ? `✓ ${fixed} song${fixed === 1 ? '' : 's'} play again${still ? ` · ${still} still blocked` : ''}`
+    : (still ? `${still} song${still === 1 ? ' is' : 's are'} still blocked. YouTube can take a few minutes to update after the change` : 'Done'), fixed ? 'good' : (still ? 'bad' : ''));
 }
 
 /* ---------------- drag & paste YouTube links straight in ---------------- */

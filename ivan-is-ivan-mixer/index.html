@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=2.6.0">
+<link rel="stylesheet" href="styles.css?v=2.6.1">
 </head>
 <body>
 
@@ -179,6 +179,7 @@
     <div class="bar-row">
       <input id="libSearch" placeholder="Search title, creator, tag, permission…" class="grow">
       <button type="button" id="libImportBtn" class="primary" title="Bring in your existing music list: paste it, or pick a CSV / text file exported from your Rundown console or a spreadsheet">📥 Import list</button>
+      <button type="button" id="libRecheck" title="Check every ⚠ song again, for example after a writer switched &quot;Allow embedding&quot; on, and clear the mark on the ones that now play">↻ Re-check ⚠ songs</button>
       <button type="button" id="libProbeAll" title="Look up any missing song lengths">Fill missing lengths</button>
     </div>
     <table class="lib-table">
@@ -400,7 +401,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=2.6.0"></script>
+<script src="app.js?v=2.6.1"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

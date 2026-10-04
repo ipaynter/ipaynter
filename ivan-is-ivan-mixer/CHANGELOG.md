@@ -18,6 +18,13 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v2.6.1 — 2026-10-04 — Re-check blocked songs
+Commit: see the commit titled *“v2.6.1: re-check blocked songs”*
+- **↻ Re-check ⚠ songs** in the Library tests every marked song again and clears the ⚠ on the ones that now play, for example after the owner switched on *Allow embedding*.
+- A ↻ button on each marked song re-checks just that one.
+- A marked song that plays successfully on a deck clears its own ⚠, and Smart DJ can pick it again.
+- **Fixed:** the song check could take a late signal from the previous song as the answer. It now confirms the reply is about the song being tested.
+
 ## v2.6.0 — 2026-10-04 — Desktop button
 Commit: `c9bd25e`
 - New `Ivan Mixer.bat`. Each click installs the newest `ivan-is-ivan-mixer*.zip` from Downloads (only when it's new) into `%USERPROFILE%\IvanIsIvanMixer`, keeping your library and Stream Deck key. It then starts the mixer.
