@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.0.0 — 2026-10-04 — Separate Viewer tab
-Commit: see the commit titled *“v3.0.0: separate Viewer tab”*
+Commit: `de22d6c`
 - **The viewer page is now its own Chrome tab and no longer covers the mixer.** POWER ON opens it automatically. Click it once, then share **that tab** in StreamYard with *Also share tab audio*.
 - The music and video play in the Viewer tab, so StreamYard captures them. The mixer remote-controls it. Deck screens in the mixer show the song's picture.
 - Top-bar light shows the Viewer tab's status: *NOT OPEN* (click to open), *click it once*, or *connected ✓*. Full screen: press **F** in the Viewer tab.
