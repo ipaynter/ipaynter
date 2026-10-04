@@ -91,14 +91,14 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 7.2 Tick **Voice auto-duck** and allow the mic. Speak, and the music dips. Stop, and it returns after about 1 second.
 - [ ] 7.3 If it dips with nobody talking, raise the trigger slider next to the mic meter.
 
-## 8. Viewer page
+## 8. Viewer tab
 
-- [ ] 8.1 Press **VIEWER PAGE** (or V). The **full video fills the whole window**. The only extra is a badge at bottom left with the creator's picture, name and song title.
-- [ ] 8.2 Press **F**. The page goes full screen. Press **F** again to leave full screen.
-- [ ] 8.3 During a mix, the video fades to the next song and the badge slides in with the new creator.
-- [ ] 8.4 Move the mouse to the top-right corner. The **Full screen / Exit** buttons appear. Move away and they vanish.
-- [ ] 8.5 Press **Esc**. You're back at the controls and **the music keeps playing**.
-- [ ] 8.6 Every writer shows their own picture. If one is missing, click ✎ on their card → **Image** → upload one → Save.
+- [ ] 8.1 After POWER ON a second tab, **"Ivan is Ivan — VIEWER (share this tab)"**, opens by itself. If Chrome blocks it, allow pop-ups for localhost:8765 and click **VIEWER TAB**.
+- [ ] 8.2 Click it once. The mixer's top-bar light turns **Viewer tab: connected ✓**.
+- [ ] 8.3 Play a song from the mixer. You hear it, and the full video shows **in the Viewer tab** with the creator badge. The mixer tab stays fully visible.
+- [ ] 8.4 Press **F** in the Viewer tab: full screen. Press **F** again to leave full screen.
+- [ ] 8.5 During a mix, the video fades to the next song and the badge slides in with the new creator.
+- [ ] 8.6 Close the Viewer tab while a song plays. The mixer warns you and the light shows **NOT OPEN**. Click the light, then click the new tab once. The song continues where it was.
 
 ## 8b. Overriding Smart DJ
 
@@ -112,7 +112,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 ## 9. StreamYard (private broadcast)
 
 - [ ] 9.1 StreamYard: set your XLR mic as normal.
-- [ ] 9.2 **Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"**, and tick **Also share tab audio**.
+- [ ] 9.2 **Share screen → Chrome Tab → "Ivan is Ivan — VIEWER (share this tab)"**, and tick **Also share tab audio**.
 - [ ] 9.3 Put the share on stage. Viewers see the full video with the creator badge.
 - [ ] 9.4 Start a **private / unlisted** test broadcast. Talk over music using TALK.
 - [ ] 9.5 Watch the recording afterwards:

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=2.6.1">
+<link rel="stylesheet" href="styles.css?v=3.0.0">
 </head>
 <body>
 
@@ -27,10 +27,11 @@
     <div class="clock-box" title="How long you have been on air"><label>SHOW</label><span id="showTimer">0:00:00</span></div>
     <div class="clock-box" title="Time of day"><label>CLOCK</label><span id="clock">--:--:--</span></div>
     <div class="clock-box" title="Total length of everything in the queue"><label>QUEUE</label><span id="queueTime">0:00</span></div>
-    <button id="stageBtn" class="stage-btn" type="button" data-cmd="stage" title="Viewer page: the full YouTube video fills the window with a small badge (creator image, name, song title). Share THIS tab in StreamYard with tab audio. Press F inside for full screen.">◉ VIEWER PAGE</button>
+    <button id="stageBtn" class="stage-btn" type="button" data-cmd="stage" title="Opens (or shows) the Viewer tab: the full YouTube video with the creator badge. The music plays there, so share THAT tab in StreamYard with tab audio. The mixer stays here.">◉ VIEWER TAB</button>
   </div>
   <div class="top-right">
     <button id="inboxPill" class="pill pill-btn hidden" type="button" title="New uploads from your creators are waiting for approval">🔔 <span id="inboxPillN">0</span> new</button>
+    <button id="viewerStatus" class="pill pill-btn hidden" type="button" title="The Viewer tab plays the music and video for StreamYard. Click to open or show it.">Viewer tab: …</button>
     <span id="diskStatus" class="pill" title="Your library is also saved to the data folder next to the app, so clearing Chrome cannot lose it">Disk: …</span>
     <span id="remoteStatus" class="pill" title="Stream Deck buttons work when the mixer is started with the start script">Stream Deck: …</span>
     <span id="ytStatus" class="pill" title="Status of the YouTube player connection">YouTube: loading…</span>
@@ -244,6 +245,7 @@
             <option value="off">Off</option>
           </select></label>
         <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play tracks in the library)</label>
+        <label class="check" title="ON (recommended): music and video play in a separate Viewer tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Viewer tab</b> (share that tab in StreamYard)</label>
       </div>
       <div class="card">
         <h3>About this version</h3>
@@ -319,7 +321,7 @@
       <li><b>Library:</b> paste any approved link and press <i>Fetch info</i>. On a deck, press <b>TAP</b> to the beat and <b>GRID</b> on a downbeat once per song — it's saved forever.</li>
       <li><b>Queue:</b> drag songs in, or use <b>Smart Next</b>. You always have the final say: songs marked <b>SMART</b> were picked for you — press <b>⇄</b> to swap one, ✕ to remove it, or drag your own song in front. <b>Not now</b> hides a suggestion for this show; 🤖 in the library stops a song ever being auto-picked.</li>
       <li>Go live in StreamYard, press <b>ON AIR</b>, then <b>AUTO DJ</b> — or mix by hand with <b>MIX ⇄</b> and the crossfader.</li>
-      <li>Press <b>VIEWER PAGE</b> (V) and share this tab in StreamYard with <i>Share tab audio</i> ticked. Viewers see the full YouTube video with the creator&#39;s picture, name and song title — never your controls. Press <b>F</b> for full screen.</li>
+      <li>POWER ON opens a second tab, the <b>Viewer tab</b>. Click it once. In StreamYard, share <b>that</b> tab with <i>Also share tab audio</i> ticked. Viewers see the full YouTube video with the creator&#39;s picture, name and song title. Your mixer stays in its own tab.</li>
       <li>Talking? Hit <b>TALK</b> (T) or turn on voice auto-duck.</li>
     </ol>
     <p class="dim">Hover over anything for help. Keys and Stream Deck URLs are in Settings.</p>
@@ -401,7 +403,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=2.6.1"></script>
+<script src="app.js?v=3.0.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

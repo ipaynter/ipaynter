@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ivan is Ivan — VIEWER (share this tab)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; color: #e8edf4; }
+  body.idle { cursor: none; }
+  .vid { position: fixed; inset: 0; opacity: 0; transition: opacity .25s; background: #000; }
+  .vid iframe, .vid > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .badge {
+    --cc: #22d3ee; position: fixed; z-index: 10; left: 2.5vw; bottom: 4vh; max-width: min(60vw, 720px);
+    display: flex; align-items: center; gap: 14px; padding: 10px 22px 10px 10px;
+    background: rgba(6, 8, 12, .78); backdrop-filter: blur(8px);
+    border: 2px solid color-mix(in srgb, var(--cc) 70%, transparent); border-radius: 60px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 0 24px color-mix(in srgb, var(--cc) 30%, transparent);
+  }
+  .badge.hidden { display: none; }
+  .badge.enter { animation: badgeIn .7s cubic-bezier(.2, .8, .2, 1); }
+  .badge img { width: clamp(48px, 5.5vw, 84px); aspect-ratio: 1; border-radius: 50%; object-fit: cover; flex: none; border: 3px solid var(--cc); background: #111; }
+  .badge .txt { min-width: 0; }
+  .badge .name { font-size: clamp(16px, 1.9vw, 30px); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px #000; }
+  .badge .song { font-size: clamp(12px, 1.25vw, 20px); color: #d5dce6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @keyframes badgeIn { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+  /* only you see these: before the first click, and when the mixer is not connected */
+  .connect { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; text-align: center; background: radial-gradient(800px 400px at 50% 40%, rgba(34, 211, 238, .14), transparent), #05070b; cursor: pointer; }
+  .connect.hidden { display: none; }
+  .connect h1 { font-size: 44px; letter-spacing: 4px; margin: 0 0 8px; }
+  .connect h1 em { color: #ff7a3d; font-weight: 300; }
+  .connect .big { display: inline-block; margin: 26px 0 18px; font-size: 22px; font-weight: 800; letter-spacing: 3px; padding: 16px 36px; border-radius: 40px; border: 2px solid #22d3ee; box-shadow: 0 0 24px rgba(34, 211, 238, .45); }
+  .connect p { color: #8a95a8; max-width: 560px; margin: 6px auto; line-height: 1.5; }
+  .status { position: fixed; z-index: 20; top: 10px; right: 10px; font-size: 12px; padding: 4px 10px; border-radius: 20px; background: rgba(255, 59, 79, .9); color: #fff; }
+  .status.hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="vid" id="wrapA"><div id="vA"></div></div>
+  <div class="vid" id="wrapB"><div id="vB"></div></div>
+
+  <div class="badge hidden" id="badge">
+    <img id="avatar" alt="">
+    <div class="txt"><div class="name" id="name"></div><div class="song" id="song"></div></div>
+  </div>
+
+  <div class="connect" id="connect">
+    <div>
+      <h1>IVAN <em>is</em> IVAN</h1>
+      <div>VIEWER TAB</div>
+      <div class="big">▶ CLICK ONCE TO CONNECT</div>
+      <p>This tab plays the music and video. Click once so Chrome allows sound.</p>
+      <p>Then go back to the <b>Mixer</b> tab. In StreamYard, share <b>this</b> tab with <b>"Also share tab audio"</b>.</p>
+      <p>Press <b>F</b> here for full screen.</p>
+    </div>
+  </div>
+  <div class="status hidden" id="status">Mixer not connected — open the Mixer tab</div>
+
+  <script src="viewer.js?v=3.0.0"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

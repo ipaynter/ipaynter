@@ -18,6 +18,16 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.0.0 — 2026-10-04 — Separate Viewer tab
+Commit: see the commit titled *“v3.0.0: separate Viewer tab”*
+- **The viewer page is now its own Chrome tab and no longer covers the mixer.** POWER ON opens it automatically. Click it once, then share **that tab** in StreamYard with *Also share tab audio*.
+- The music and video play in the Viewer tab, so StreamYard captures them. The mixer remote-controls it. Deck screens in the mixer show the song's picture.
+- Top-bar light shows the Viewer tab's status: *NOT OPEN* (click to open), *click it once*, or *connected ✓*. Full screen: press **F** in the Viewer tab.
+- If the Viewer tab is closed or reloaded mid-song, the mixer warns you. Reopen it and every song resumes where it was.
+- The mixer's timing (fades, Auto DJ) is driven by the Viewer tab, so it stays exact even when Chrome slows the mixer tab in the background. Tested with the mixer's own timers slowed to once a minute.
+- The Viewer tab hides the mouse pointer when it isn't moving.
+- The old single-tab mode is still available: Settings → untick *Play music in a separate Viewer tab*.
+
 ## v2.6.1 — 2026-10-04 — Re-check blocked songs
 Commit: `a4a9ce7`
 - **↻ Re-check ⚠ songs** in the Library tests every marked song again and clears the ⚠ on the ones that now play, for example after the owner switched on *Allow embedding*.

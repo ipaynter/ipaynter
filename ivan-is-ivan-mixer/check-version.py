@@ -17,7 +17,7 @@ version = read("VERSION").strip()
 found = {
     "VERSION": [version],
     "app.js APP_VERSION": re.findall(r"const APP_VERSION = '([^']+)'", read("app.js")),
-    "index.html ?v= (css + js)": re.findall(r'\?v=([0-9][^"]*)"', read("index.html")),
+    "index.html + viewer.html ?v=": re.findall(r'\?v=([0-9][^"]*)"', read("index.html") + read("viewer.html")),
     "CHANGELOG.md newest entry": re.findall(r"^## v(\S+)", read("CHANGELOG.md"), re.M)[:1],
 }
 ok = re.fullmatch(r"\d+\.\d+\.\d+", version) is not None

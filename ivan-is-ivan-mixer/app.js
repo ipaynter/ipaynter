@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '2.6.1';
+const APP_VERSION = '3.0.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -99,7 +99,7 @@ const S = {
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
-    snapBars: true, smartFill: true
+    snapBars: true, smartFill: true, viewerTab: true
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
@@ -239,17 +239,114 @@ const Tip = {
 
 /* ---------------- tweens (setInterval so they keep running when the window is in the background) ---------------- */
 
+// Progress is worked out from the clock, so fades stay on time however often stepTweens runs.
 const tweens = {};
-function cancelTween(key) { clearInterval(tweens[key]); delete tweens[key]; }
+function cancelTween(key) { delete tweens[key]; }
 function tween(key, from, to, ms, step, done) {
-  cancelTween(key);
+  delete tweens[key];
   if (ms <= 0) { step(to); if (done) done(); return; }
-  const t0 = performance.now();
-  tweens[key] = setInterval(() => {
-    const p = Math.min(1, (performance.now() - t0) / ms);
-    step(from + (to - from) * p);
-    if (p >= 1) { cancelTween(key); if (done) done(); }
-  }, 30);
+  tweens[key] = { from, to, ms, t0: performance.now(), step, done };
+}
+function stepTweens() {
+  const now = performance.now();
+  for (const [key, t] of Object.entries(tweens)) {
+    const p = Math.min(1, (now - t.t0) / t.ms);
+    t.step(t.from + (t.to - t.from) * p);
+    if (p >= 1 && tweens[key] === t) { delete tweens[key]; if (t.done) t.done(); }
+  }
+}
+setInterval(stepTweens, 30);
+
+/* ---------------- Viewer tab link: the YouTube players live in a separate tab you share in StreamYard ---------------- */
+
+const Bus = {
+  ch: ('BroadcastChannel' in window) ? new BroadcastChannel('iii-mixer') : null,
+  connected: false, activated: false, lastSeen: 0, win: null, instance: null,
+  send(m) { try { this.ch?.postMessage(m); } catch { /* closed */ } }
+};
+
+// Stands in for a YouTube player: sends commands to the Viewer tab, keeps the latest reported state.
+class RemotePlayer {
+  constructor(id, events) { this.id = id; this.ev = events; this.st = { time: 0, dur: 0, state: -1, vd: {}, at: performance.now() }; this.readyFired = false; }
+  _cmd(fn, ...args) { Bus.send({ t: 'cmd', deck: this.id, fn, args }); }
+  _load(fn, o) { this.st = { ...this.st, time: o.startSeconds || 0, dur: 0, vd: { video_id: o.videoId }, at: performance.now() }; this._cmd(fn, o); }
+  loadVideoById(o) { this._load('loadVideoById', o); }
+  cueVideoById(o) { this._load('cueVideoById', o); }
+  playVideo() { this._cmd('playVideo'); }
+  pauseVideo() { this._cmd('pauseVideo'); }
+  stopVideo() { this._cmd('stopVideo'); }
+  seekTo(t, a) { this.st.time = t; this.st.at = performance.now(); this._cmd('seekTo', t, a); }
+  setVolume(v) { this._cmd('setVolume', v); }
+  mute() { this._cmd('mute'); }
+  unMute() { this._cmd('unMute'); }
+  isMuted() { return false; }
+  getCurrentTime() {
+    let t = this.st.time;
+    if (this.st.state === 1) t += (performance.now() - this.st.at) / 1000; // smooth between reports
+    return this.st.dur ? Math.min(t, this.st.dur) : t;
+  }
+  getDuration() { return this.st.dur; }
+  getVideoData() { return this.st.vd || {}; }
+  update(d) { if (d) { this.st = { ...this.st, ...d, at: performance.now() }; } }
+}
+
+function viewerLost() {
+  const was = Bus.connected;
+  Bus.connected = false; Bus.activated = false;
+  // Nothing plays now; keep each song's position so it resumes there when a Viewer tab reconnects.
+  Object.values(decks).forEach(d => { if (d.player instanceof RemotePlayer) { d.ready = false; d.player.readyFired = false; d.player.st.state = -1; d.ytState = -1; } });
+  renderViewerPill();
+  if (was && (decks.A.wantPlay || decks.B.wantPlay)) toast('The Viewer tab was closed — music stopped. Click VIEWER TAB to reopen it; songs resume where they were.', 'bad');
+}
+
+if (Bus.ch) Bus.ch.onmessage = e => {
+  const m = e.data || {};
+  if (!S.cfg.viewerTab) return;
+  if (m.t === 'bye') { if (m.vid === Bus.instance) viewerLost(); return; }
+  // A different Viewer tab than before (reopened or reloaded): start it fresh.
+  if (m.vid && m.vid !== Bus.instance) {
+    if (Bus.instance) viewerLost();
+    Bus.instance = m.vid;
+    if (m.t !== 'hello') Bus.send({ t: 'ping' }); // ask the new tab which players are ready
+  }
+  Bus.lastSeen = Date.now();
+  if (!Bus.connected) { Bus.connected = true; renderViewerPill(); }
+  if (m.t === 'hello') {
+    Bus.activated = !!m.activated; renderViewerPill();
+    ['A', 'B'].forEach(id => { if (m.ready?.[id]) remoteReady(id); });
+    stageSig = ''; renderStage();
+  } else if (m.t === 'ready') remoteReady(m.deck);
+  else if (m.t === 'state') { const p = decks[m.deck]?.player; if (p instanceof RemotePlayer) { p.st.state = m.s; p.st.at = performance.now(); p.ev.onStateChange({ data: m.s }); } }
+  else if (m.t === 'error') { const p = decks[m.deck]?.player; if (p instanceof RemotePlayer) p.ev.onError({ data: m.code }); }
+  else if (m.t === 'tick') {
+    ['A', 'B'].forEach(id => { const p = decks[id]?.player; if (p instanceof RemotePlayer && m[id]) p.update(m[id]); });
+    stepTweens(); frame(); // the viewer's messages keep the mixer on time even when this tab is in the background
+  }
+};
+
+function remoteReady(id) {
+  const d = decks[id];
+  if (!(d?.player instanceof RemotePlayer) || d.player.readyFired) return;
+  d.player.readyFired = true;
+  d.player.ev.onReady();
+}
+
+function openViewer() {
+  let w = null;
+  try { w = window.open('', 'iii-viewer'); } catch { /* blocked */ }
+  if (!w) { toast('Chrome blocked the Viewer tab. Click the blocked-pop-up icon in the address bar and choose "Always allow" for localhost:8765.', 'bad'); return; }
+  try { if (!w.location.href || w.location.href === 'about:blank') w.location.href = 'viewer.html?v=' + APP_VERSION; } catch { /* already open */ }
+  try { w.focus(); } catch { /* fine */ }
+  Bus.win = w;
+}
+
+function renderViewerPill() {
+  const p = $('#viewerStatus');
+  if (!p) return;
+  p.classList.toggle('hidden', !S.cfg.viewerTab);
+  if (!Bus.connected) { p.textContent = 'Viewer tab: NOT OPEN — click'; p.className = 'pill pill-btn bad'; }
+  else if (!Bus.activated) { p.textContent = 'Viewer tab: click it once'; p.className = 'pill pill-btn warn'; }
+  else { p.textContent = 'Viewer tab: connected ✓'; p.className = 'pill pill-btn ok'; }
 }
 
 /* ---------------- volume model ---------------- */
@@ -320,6 +417,16 @@ class Deck {
   }
 
   create() {
+    if (S.cfg.viewerTab) {
+      this.r.player.innerHTML = '<div class="remote-screen"><img alt=""><span>▶ plays on the Viewer tab</span></div>';
+      this.r.remoteImg = this.r.player.querySelector('img');
+      this.player = new RemotePlayer(this.id, {
+        onReady: () => { this.ready = true; this.lastVol = -1; applyVolumes(); if (this.track) this.resume(); },
+        onStateChange: e => this.onState(e.data),
+        onError: e => this.onError(e.data)
+      });
+      return;
+    }
     this.player = new YT.Player(this.r.player.id, {
       host: YT_HOST, width: '100%', height: '100%',
       playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0, iv_load_policy: 3, playsinline: 1, origin: location.origin },
@@ -332,6 +439,14 @@ class Deck {
         onError: e => this.onError(e.data)
       }
     });
+  }
+
+  // After the Viewer tab (re)connects: carry on from where this song was.
+  resume() {
+    const midSong = this.played && !this.finished && this.time > 0;
+    const o = { videoId: this.track.videoId, startSeconds: midSong ? this.time : (this.cuePoint || 0) };
+    this.lastVol = -1; applyVolumes();
+    if (this.wantPlay) this.player.loadVideoById(o); else this.player.cueVideoById(o);
   }
 
   onAirNow() { return this.isPlaying() && this.out > 0.05; }
@@ -597,6 +712,7 @@ class Deck {
     if ((t?.videoId || null) !== this.thumbVid) {
       this.thumbVid = t?.videoId || null;
       r.thumb.src = this.thumbVid ? thumb(this.thumbVid) : '';
+      if (r.remoteImg) r.remoteImg.src = this.thumbVid ? thumb(this.thumbVid).replace('mqdefault', 'hqdefault') : '';
       r.platter.classList.toggle('empty', !this.thumbVid);
     }
     const playing = this.isPlaying();
@@ -1228,6 +1344,7 @@ function initCreatorsUI() {
 
 let stageSig = '';
 function setStage(on) {
+  if (S.cfg.viewerTab) { if (on) openViewer(); return; }
   S.stage = on;
   Tip.hide();
   document.body.classList.toggle('staged', on);
@@ -1243,12 +1360,32 @@ function setStage(on) {
 }
 
 function toggleFullscreen() {
+  if (S.cfg.viewerTab) { openViewer(); toast('Full screen: press F in the Viewer tab'); return; }
   if (!S.stage) setStage(true);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else document.documentElement.requestFullscreen().catch(() => toast('Full screen was blocked — click the page, then press F', 'bad'));
 }
 
+let lastDisplay = '', lastDisplayAt = 0;
+function sendDisplay() {
+  const A = decks.A, B = decks.B, pa = A.isPlaying(), pb = B.isPlaying();
+  let wa = 1 - S.xf;
+  if (pa && !pb) wa = 1; else if (!pa && pb) wa = 0; else if (!pa && !pb) wa = liveDeck() === A ? 1 : 0;
+  const opA = A.errored || !A.track ? 0 : wa, opB = B.errored || !B.track ? 0 : 1 - wa;
+  const main = wa >= 0.5 ? A : B, t = main.track, c = creatorOf(t);
+  const msg = {
+    t: 'display',
+    A: { op: +opA.toFixed(2), top: wa >= 0.5 }, B: { op: +opB.toFixed(2), top: wa < 0.5 },
+    badge: t && !main.errored ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')) } : null
+  };
+  const sig = JSON.stringify(msg);
+  if (sig === lastDisplay && Date.now() - lastDisplayAt < 2000) return;
+  lastDisplay = sig; lastDisplayAt = Date.now();
+  Bus.send(msg);
+}
+
 function renderStage() {
+  if (S.cfg.viewerTab) { sendDisplay(); return; }
   if (!S.stage) return;
   const A = decks.A, B = decks.B, pa = A.isPlaying(), pb = B.isPlaying();
   // The full video fills the window and crossfades along with the audio.
@@ -2245,6 +2382,14 @@ function initSettingsUI() {
   $('#warnSec').onchange = e => { S.cfg.warnSec = clamp(+e.target.value || 30, 5, 120); save.cfg(); };
   $('#deadAirMode').onchange = e => { S.cfg.deadAirMode = e.target.value; save.cfg(); };
   $('#approvedOnly').onchange = e => { S.cfg.approvedOnly = e.target.checked; save.cfg(); };
+  $('#viewerTabMode').checked = S.cfg.viewerTab;
+  $('#viewerTabMode').onchange = async e => {
+    if (decks.A.isPlaying() || decks.B.isPlaying()) { e.target.checked = S.cfg.viewerTab; toast('Stop the music first, then change this', 'bad'); return; }
+    if (!(await ask('Switching where the music plays reloads the mixer. Continue?', 'Reload'))) { e.target.checked = S.cfg.viewerTab; return; }
+    S.cfg.viewerTab = e.target.checked; save.cfg();
+    setTimeout(() => location.reload(), 300);
+  };
+  $('#stageBtn').textContent = S.cfg.viewerTab ? '◉ VIEWER TAB' : '◉ VIEWER PAGE';
   $('#exportBtn').onclick = exportData;
   $('#importFile').onchange = e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; };
   $('#keysBody').addEventListener('click', async e => {
@@ -2336,7 +2481,14 @@ function deadAirCheck() {
   $('#deadAir').classList.toggle('hidden', !(S.deadSince && Date.now() - S.deadSince > 2500));
 }
 
-let tickN = 0;
+let tickN = 0, lastFrame = 0;
+// Runs the mixer's clock: from a timer, and from the Viewer tab's messages (which Chrome never slows down).
+function frame() {
+  const now = performance.now();
+  if (now - lastFrame < 85) return;
+  lastFrame = now;
+  tick();
+}
 function tick() {
   tickN++;
   Object.values(decks).forEach(d => d.tick());
@@ -2349,6 +2501,10 @@ function tick() {
     $('#clock').textContent = new Date().toLocaleTimeString([], { hour12: false });
     if (S.onAir) $('#showTimer').textContent = fmtClock((Date.now() - S.onAirAt) / 1000);
     updateQueueEtas();
+    if (S.cfg.viewerTab) {
+      if (Bus.connected && Date.now() - Bus.lastSeen > 3000) viewerLost();
+      if (!Bus.connected) Bus.send({ t: 'ping' });
+    }
   }
 }
 
@@ -2356,7 +2512,8 @@ function tick() {
 
 window.onYouTubeIframeAPIReady = () => {
   S.ytReady = true;
-  decks.A.create(); decks.B.create(); Probe.init();
+  if (!S.cfg.viewerTab) { decks.A.create(); decks.B.create(); }
+  Probe.init();
   const pill = $('#ytStatus'); pill.textContent = 'YouTube: ready'; pill.className = 'pill ok';
 };
 
@@ -2379,7 +2536,14 @@ function boot() {
   setInterval(() => { if (!S.onAir) Creators.checkAll(false); }, 30 * 60 * 1000);
 
   if (location.protocol === 'file:') $('#fileWarn').classList.remove('hidden');
-  $('#power').onclick = () => { $('#splash').classList.add('hidden'); if (!S.library.length && !S.creators.length) $('#help').classList.remove('hidden'); };
+  $('#power').onclick = () => {
+    $('#splash').classList.add('hidden');
+    if (S.cfg.viewerTab) openViewer(); // opens the Viewer tab (this click lets Chrome open it)
+    if (!S.library.length && !S.creators.length) $('#help').classList.remove('hidden');
+  };
+  if (S.cfg.viewerTab) { decks.A.create(); decks.B.create(); Bus.send({ t: 'ping' }); }
+  renderViewerPill();
+  $('#viewerStatus').onclick = openViewer;
 
   setTimeout(() => {
     if (!S.ytReady) { const p = $('#ytStatus'); p.textContent = 'YouTube: not loading — check internet'; p.className = 'pill bad'; }
@@ -2389,7 +2553,7 @@ function boot() {
     if (decks.A.isPlaying() || decks.B.isPlaying() || S.onAir) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  setInterval(tick, 100);
+  setInterval(frame, 100);
 }
 
 boot();

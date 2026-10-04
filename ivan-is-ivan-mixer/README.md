@@ -42,7 +42,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
 4. **Queue:** drag songs in, or use the **Smart Next** cards.
 5. Go live in StreamYard, press **ON AIR**, then **AUTO DJ**, or mix by hand.
-6. Press **VIEWER PAGE** (V). This is the page you share in StreamYard: the full video, nothing else but a small creator badge. Press **F** for full screen.
+6. The **Viewer tab** opened by itself at POWER ON. Click it once, then share it in StreamYard. If it was closed, click **VIEWER TAB**.
 7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
 
 ## Adding music: just drag or paste the link
@@ -110,14 +110,14 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 - **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
 - Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
 
-**Viewer page (what viewers see)**
-- The full YouTube video fills the whole window. Press **F** for true full screen.
-- One small badge in the corner shows the **creator's picture, name and song title**. It slides in again at every new song and changes colour with the creator.
-- The video crossfades along with the audio.
-- Your controls, pop-up messages and tooltips never appear on it.
-- To show the Full screen / Exit buttons, move the mouse to the top-right corner. Viewers never see them.
-- Press **V** or **Esc** to go back to the controls. The music keeps playing.
-- **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead. A writer with no picture shows the song's YouTube image.
+**Viewer tab (what viewers see)**
+- A separate Chrome tab, opened automatically when you press POWER ON. Your mixer stays in its own tab, fully visible.
+- Click the Viewer tab **once** so Chrome lets it play sound. Then share **that tab** in StreamYard with **Also share tab audio**. The music plays from there.
+- It shows the full YouTube video, plus one small badge: the **creator's picture, name and song title**. The video crossfades with the audio.
+- Press **F** in the Viewer tab for full screen. The mouse pointer hides by itself.
+- The top-bar light in the mixer shows its status. If it says **NOT OPEN**, click it to open the Viewer tab again. Songs resume where they were.
+- **Don't close the Viewer tab during the show.** The music plays from it.
+- **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead.
 
 **You always have the final say over Smart DJ**
 - Songs that Smart DJ queued carry a **SMART** tag. Press **⇄** to swap one for the next-best pick, **✕** to remove it, or drag your own song in front of it.
@@ -136,7 +136,7 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 
 ## Getting the music into StreamYard
 
-1. **Share the tab (free, simplest).** Press **VIEWER PAGE**. In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"* and tick **Also share tab audio**. Viewers see the full video with the creator badge and hear the music. Control everything from the Stream Deck while it is shared.
+1. **Share the Viewer tab (free, simplest).** In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — VIEWER (share this tab)"* and tick **Also share tab audio**. Viewers see the full video with the creator badge and hear the music. Your mixer stays in its own tab.
 2. **Virtual audio mixer (best control).** Install the free **Voicemeeter** (Windows). Route your XLR interface and Chrome into it, and pick *Voicemeeter Output* as your mic in StreamYard.
 
 Run a private test broadcast first.
