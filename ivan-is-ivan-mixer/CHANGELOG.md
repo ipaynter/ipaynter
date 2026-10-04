@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.2.2 — 2026-10-04 — Your icon
-Commit: `pending`
+Commit: `f897034`
 - The desktop button now shows the **Ivan "i" icon** (`ivan-mixer.ico`). The button is refreshed on every click, so an existing button picks up the new icon.
 - The mixer and Viewer tabs show the same icon in Chrome.
 
