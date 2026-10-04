@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.2.0 — 2026-10-04 — Clean and simple
-Commit: `pending`
+Commit: `285c12b`
 - **Click any song in the list** to cue it as **UP NEXT** on the free deck.
 - **One big ▶ Play next** (or Space, or the Stream Deck *mix* key) brings it in. If nothing is cued, it plays the next song in the list. If nothing is playing, it just starts.
 - **Slimmer decks:** picture, title, time to end, progress, ▶ and cue. Everything else (seek, tempo, hot cues, loops, trim, link box) sits behind **⋯**.
