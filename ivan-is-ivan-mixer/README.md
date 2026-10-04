@@ -37,18 +37,22 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Daily flow
 
-1. **Creators tab:** add your four music writers, yourself included (name, YouTube channel, color, **Share %**). Give your own songs a bigger share, e.g. you 40, the others 20 each. New uploads show up on their own. Click **✓ Approve** or **Ignore**.
-2. **Library:** for any other approved link, paste it and press **Fetch info**. Add BPM and energy if you know them.
-3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
-4. **Queue:** drag songs in, or use the **Smart Next** cards.
-5. Go live in StreamYard, press **ON AIR**, then **AUTO DJ**, or mix by hand.
-6. The **Viewer tab** opened by itself at POWER ON. Click it once, then share it in StreamYard. If it was closed, click **VIEWER TAB**.
-7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
+1. Click the desktop button, then **Power on**. The **Viewer tab** opens. Click it once.
+2. **Writers** (bottom of the page): paste the YouTube channel link once each for you, Lance, Lise and Rhonda. Their new songs appear above the list. **✓ Add** puts a song at the bottom of the list.
+3. **The list** is all the show's music, in play order. Drag rows to reorder. **↑** plays a song next. **✨ Line-up** arranges the rest for you, and **Undo** puts it back.
+4. Choose who drives:
+   - **Manual**: you DJ, and the list just shows what's next.
+   - **Assist**: the next song is lined up on the free deck and mixed in when a song ends, if you haven't already. You read the room.
+   - **Auto**: runs the show down the list. When the list runs out, it keeps going with fair picks from your writers.
+
+   Click **Manual** any time to take over completely.
+5. In StreamYard, share the **Viewer tab** with *Also share tab audio*. Press **ON AIR** when you go live; that also starts a fresh "played" count.
+6. After the show: **Log & credits → Credits: this show → Copy**.
 
 ## Adding music: just drag or paste the link
 
-- **Drag** a YouTube link (from the address bar, a YouTube page, your Rundown page…) over the mixer. A drop screen appears with three boxes: **DECK A · QUEUE · DECK B**. Let go on the one you want.
-- **Ctrl+V** anywhere in the mixer adds a copied YouTube link to the queue.
+- **Drag** a YouTube link (from the address bar, a YouTube page, your Rundown page…) over the mixer. A drop screen appears with three boxes: **DECK A · THE LIST · DECK B**. Let go on the one you want.
+- **Ctrl+V** anywhere in the mixer adds a copied YouTube link to the bottom of the list. You can also paste into the box at the top of the list.
 - **Paste** into a deck's link box and press LOAD. It asks once, then adds and loads it.
 
 A new link is added to your approved library by itself, as you vouch for what you drop in. Title, writer (matched from the YouTube channel name) and length fill in within seconds. The same link is never added twice.
@@ -73,42 +77,29 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 
 ## What it does
 
-**Decks A and B**
-- **TIME TO END** countdown: turns yellow at 30 s and flashes red at 10 s. It also tells you whether the next song is cued, so you don't hit dead air.
-- **Beat counter:** 4 beat lights, BPM, "BAR 12.3 · 8 bars left", and a bar grid on the progress bar.
-- **TAP / GRID / ½ / ×2:** set the tempo and the downbeat, saved with the song.
-- **CUE** works like a club deck: when paused it sets the cue point, when playing it jumps back to the cue and pauses.
-- **4 hot cues:** click to set, click again to jump, right-click clears.
-- **Loops:** IN / OUT, a 4-bar instant loop (8 s if the tempo is unknown) and EXIT.
-- **TRIM: START / MIX-OUT:** skip long intros and outros. Saved with the song.
-- **Spinning record:** shows the song's thumbnail, with a top stripe in the creator's color.
+**The list (one list for everything)**
+- Each song shows its YouTube picture, title, writer, start time from now and length.
+- Status of each song: **▶ ON A/B** (playing), **ON A/B** (lined up on a deck), **NEXT**, **✓ played** (this show), or **⚠ blocked** (embedding is off; use ↻ to check again after it's fixed).
+- Hover a row for its buttons: **A** / **B** load it onto a deck, **↑** plays it next, **✎** opens its details (title, writer, BPM, energy, notes), **✕** removes it. Double-click a row to load it onto the free deck.
+- **✨ Line-up** is the line-up assistant. It arranges the songs still to play so the writers get their fair share (you 40%, the others 20% each), the tempo and energy flow, and new songs come early. **Undo** puts the list back.
+- **Find…** filters the list.
 
-**Mixer**
-- **Tempo match:** shows both decks' BPM and turns green when they are close enough to overlap smoothly.
-- Fader for each deck plus a master fader.
-- Crossfader with three curves: Smooth (constant power), Linear and Scratch cut.
-- **MIX ⇄** crossfades to the other deck, then stops the old one.
-- **TALK** dips the music while you speak.
-- **Voice auto-duck** does it automatically from your mic level. It never records. Wear headphones.
-- **FADE ALL OUT:** an emergency fade to silence. It's on the button and the Stream Deck only, so a stray key can't kill your music.
+**Decks A and B** (compact)
+- Picture, title and writer, plus a big **time to end** that turns yellow at 30 s and red at 10 s, and a progress bar you can click to jump.
+- Buttons: **▶** play, **cue**, **⏮**, **−10 / +10**, **next ⤵** (the next song from the list), **tap / grid** (tempo and beat counter).
+- **⋯** opens hot cues, loops and trim (start / mix-out marks).
 
-**Auto DJ**
-- Plays the queue for you. It preloads the next song and crossfades FADE seconds before the end (or at the MIX-OUT mark).
-- **Mix on the bar:** when the tempo and grid are known, the crossfade starts exactly on a bar line.
-- **Smart fill:** when the queue runs dry, Auto DJ adds the best Smart Next pick, so there's no dead air.
+**Mixer: inline crossover**
+- The **Manual · Assist · Auto** switch.
+- The crossfader, **Mix ⇄**, fade time and curve.
+- Slim A / B / Master faders with level bars.
+- **🎙 Talk**, which dips the music while you speak.
+- **more** holds voice auto-duck, mix on the bar, tempo match and crossfader snaps.
 
-**Smart Next** suggests the next 3 songs and shows the reasons:
-- **Airtime shares:** the writer furthest below their Share % comes first. With you at 40 and three writers at 20, a show plays roughly 2 of your songs for every 1 of each other writer, spread out rather than in blocks.
-- **Tempo match:** songs with a close BPM, counting half and double time.
-- **Energy flow:** stays within one energy step.
-- **New releases:** gets a boost until the first play.
-- Never repeats a song within the same show.
-
-**Creators**
-- Each writer gets a card with their color, number of songs and plays. It also shows **Target %** against **Now %** for this show, a bar with a white target line, and a status: on target, behind or ahead.
-- Shares are relative, so 40/20/20/20 and 2/1/1/1 mean the same thing. Change them anytime with ✎.
-- **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
-- Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
+**Writers**
+- A card for each writer with their picture, channel, songs, and target against actual airtime this show.
+- **Play next** puts that writer's best next song up next.
+- 🔔 checks for their new uploads, and the mixer also checks every 30 minutes when you're not on air.
 
 **Viewer tab (what viewers see)**
 - A separate Chrome tab, opened automatically when you press POWER ON. Your mixer stays in its own tab, fully visible.
@@ -119,20 +110,8 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 - **Don't close the Viewer tab during the show.** The music plays from it.
 - **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead.
 
-**You always have the final say over Smart DJ**
-- Songs that Smart DJ queued carry a **SMART** tag. Press **⇄** to swap one for the next-best pick, **✕** to remove it, or drag your own song in front of it.
-- Your own queued songs always play before Smart DJ adds anything. It only fills the queue when it's empty.
-- **Not now** on a suggestion hides that song for the rest of the show.
-- **🤖** in the library makes a song *manual only*. Smart DJ will never pick it, but you still can.
-- The deck waiting to play next says **SMART DJ PICK** or **YOUR PICK**. Load or drop any song onto it to change it.
-- Turn **Smart fill** off and Smart DJ only suggests. Nothing plays unless you queue it.
-- Every queued song shows its YouTube image and length.
-
-**Library, playlists, play log**
-- **Approved-only mode** (on by default): decks refuse any link that isn't in the library.
-- Thumbnails get bigger when you hover over them.
-- Playlists can be saved, loaded or appended.
-- The play log builds credits for your YouTube description, including "Support the creators" channel links.
+**Play log & credits**
+- Everything played is logged. **Credits: this show** builds the list for your YouTube description, with links to the writers' channels.
 
 ## Getting the music into StreamYard
 
@@ -147,7 +126,7 @@ Open **Settings & Stream Deck**. Every action has a ready-made URL with a **Copy
 In the Stream Deck app, drag a **Website** action onto a key, paste the URL and tick **"GET request in background"**.
 These keys work even when StreamYard is the window in front.
 
-Good keys to set up first: Play A, Play B, MIX ⇄, Auto DJ, TALK, Viewer page, Full screen, Smart Next, Fade all out.
+Good keys to set up first: Play A, Play B, Mix ⇄, Manual, Assist, Auto, Talk, ✨ Line-up, Fade all out.
 For the **Stream Deck +** dials, assign rotate left/right to `xfLeft` / `xfRight` or `masterDown` / `masterUp`. This depends on the dial plugin you use.
 
 The URLs contain a private key (`control-key.txt`), so other websites can't press your buttons. To change the key, delete that file and restart.
@@ -155,12 +134,13 @@ The URLs contain a private key (`control-key.txt`), so other websites can't pres
 | Key | Action | Key | Action |
 |---|---|---|---|
 | 1 / 2 | Play-pause A / B | Q / W | Cue A / B |
-| A / S | Next from queue → A / B | E / R | Tap tempo A / B |
-| Space | MIX ⇄ | N | Smart Next → queue |
+| A / S | Next from the list → A / B | E / R | Tap tempo A / B |
+| Space | Mix ⇄ | | |
 | Z / X | Fade crossfader to A / B | C | Center |
 | ← / → | Nudge crossfader | ↑ / ↓ | Master ±5 |
 | [ / ] | Deck A volume | ; / ' | Deck B volume |
-| D | Auto DJ | T | Talk duck |
+| D | Auto on / off | T | Talk duck |
+| M | Manual (take over) | N | ✨ Line-up |
 | O | On Air | V | Viewer page |
 | F | Viewer page full screen | | |
 | Esc | Close / leave the viewer page (never stops music) | | |

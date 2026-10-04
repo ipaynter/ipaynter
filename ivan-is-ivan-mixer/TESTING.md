@@ -41,21 +41,21 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 3.3 Pick the writer from the list and click **Add to approved library**.
 - [ ] 3.4 Paste a link that is NOT in the library into Deck A and press LOAD. It must refuse and send you to the library.
 
-## 3a. Drag and paste links
+## 3a. The list
 
-- [ ] 3a.1 Put the mixer and a YouTube window side by side. Drag the song's link from YouTube's address bar over the mixer. A drop screen with **DECK A · QUEUE · DECK B** appears.
-- [ ] 3a.2 Let go on **DECK A**. It loads, and the title and writer fill in. Drag another and let go on **QUEUE**. It joins the queue with its picture.
-- [ ] 3a.3 Copy a YouTube link (Ctrl+C), click an empty spot in the mixer, then press **Ctrl+V**. It's queued.
-- [ ] 3a.4 Drop the same link again. The library count doesn't go up.
+- [ ] 3a.1 Paste a writer's YouTube link into **Paste a YouTube link…** at the top of the list and press Enter. It appears at the bottom with its picture; title, writer and length fill in.
+- [ ] 3a.2 Drag a YouTube link from another window over the mixer and drop it on **THE LIST**. It is added.
+- [ ] 3a.3 Drag a row to a new place. The order changes. **↑** on a row makes it **NEXT**.
+- [ ] 3a.4 **✨ Line-up** arranges the songs still to play. **Undo** puts them back.
+- [ ] 3a.5 **Writers** tab: paste each writer's channel link (✎ on their card). New songs show above the list; **✓ Add** puts one at the bottom.
+- [ ] 3a.6 **Import** reads your saved `Rundown Console.html` and adds its songs to the bottom.
 
-## 3b. Import your Rundown music list
+## 3b. Manual · Assist · Auto
 
-- [ ] 3b.1 **Approved Library → 📥 Import list → Choose file…** → pick `Downloads\Rundown Console.html`.
-- [ ] 3b.2 If it says *No YouTube links found*: open the Rundown Console in Chrome, press Ctrl+A then Ctrl+C, paste into the box, then press **Read list**.
-- [ ] 3b.3 The count of YouTube links found matches your list. Talk breaks and headings are skipped.
-- [ ] 3b.4 Each song shows the right writer. Fix any that are wrong with the drop-down.
-- [ ] 3b.5 Keep **Save as playlist**, then press **Add songs**. The songs appear in the library, and the playlist keeps the Rundown order.
-- [ ] 3b.6 Within a minute, lengths fill in. Any song marked ⚠ cannot play in the mixer because the owner blocks embedding.
+- [ ] 3b.1 **Manual**: load and play a song yourself. When it ends, nothing else happens.
+- [ ] 3b.2 **Assist**: the first song is ready on A. Press ▶. The next song appears on B. When A ends, it mixes into B by itself.
+- [ ] 3b.3 While in Assist or Auto, click **Manual**. From now on nothing mixes by itself (you've taken over).
+- [ ] 3b.4 **Auto**: music starts by itself and runs down the list.
 
 ## 4. One deck
 

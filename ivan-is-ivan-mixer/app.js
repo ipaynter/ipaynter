@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -99,7 +99,7 @@ const S = {
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
-    snapBars: true, smartFill: true, viewerTab: true
+    snapBars: true, smartFill: true, viewerTab: true, mode: 'assist'
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
@@ -110,6 +110,9 @@ const S = {
   skip: new Set(),    // songs you said 'Not now' to this show
   lastAuto: false     // was the last song taken from the queue a Smart DJ pick?
 };
+
+// Assist and Auto both mix for you; Manual leaves everything to you.
+Object.defineProperty(S, 'autoDJ', { get: () => S.cfg.mode !== 'manual', set: () => {} });
 
 const KEYS = {
   library: 'iii.library', queue: 'iii.queue', playlists: 'iii.playlists', history: 'iii.history',
@@ -122,16 +125,17 @@ Object.entries(KEYS).forEach(([name, key]) => { save[name] = () => store.set(key
    so clearing Chrome's data can never wipe the library. */
 const Disk = {
   ok: false, key: null, timer: null,
-  schedule() { if (!this.ok) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 1500); },
+  schedule() { if (!this.ok) return; this.dirty = true; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 400); },
   snapshot() {
     const o = { app: 'ivan-is-ivan-mixer', version: DATA_VERSION, appVersion: APP_VERSION, savedAt: new Date().toISOString() };
     Object.keys(KEYS).forEach(k => { o[k] = S[k]; });
     return o;
   },
   pill(ok, text) { const p = $('#diskStatus'); p.textContent = text; p.className = 'pill ' + (ok ? 'ok' : 'bad'); },
-  async push() {
+  async push(closing = false) {
+    this.dirty = false;
     try {
-      const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Key': this.key }, body: JSON.stringify(this.snapshot()) });
+      const r = await fetch('/api/save', { method: 'POST', keepalive: closing, headers: { 'Content-Type': 'application/json', 'X-Key': this.key }, body: JSON.stringify(this.snapshot()) });
       if (!r.ok) throw new Error(r.status);
       this.pill(true, 'Disk: saved ✓');
     } catch { this.pill(false, 'Disk: NOT saved'); }
@@ -411,8 +415,8 @@ class Deck {
     this.el.addEventListener('drop', e => {
       e.preventDefault(); this.el.classList.remove('drop');
       if (!drag) return; // links from outside are handled once, by the drop screen handler
-      const { id, qid } = drag; drag = null;
-      this.userLoad(byId(id)).then(ok => { if (ok && qid) removeFromQueue(qid); });
+      const { id } = drag; drag = null;
+      this.userLoad(byId(id));
     });
   }
 
@@ -461,6 +465,8 @@ class Deck {
 
   load(track, autoplay = false, auto = false) {
     if (!track) return;
+    const o = other(this);
+    if (o && o.track?.id === track.id && !o.isPlaying()) o.eject();
     this.track = track;
     this.autoPicked = auto;
     this.played = false; this.finished = false; this.errored = false;
@@ -474,6 +480,14 @@ class Deck {
     this.r.url.value = '';
     this.render();
     renderSmart();
+  }
+
+  // Empty this deck (used when the same song is taken onto the other deck).
+  eject() {
+    if (this.ready && this.track) this.player.stopVideo();
+    this.track = null; this.played = false; this.finished = false; this.errored = false;
+    this.wantPlay = false; this.ytState = -1; this.time = 0; this.dur = 0; this.loop = null;
+    this.render();
   }
 
   cueCurrent(autoplay) {
@@ -515,6 +529,7 @@ class Deck {
     else { this.cuePoint = this.time; this.seek(this.cuePoint); toast(`Deck ${this.id}: cue set at ${fmt(this.time)}`); }
   }
   act_play() { this.toggle(); }
+  act_more() { this.r.more.classList.toggle('hidden'); }
   act_restart() { this.seek(this.track?.inAt || 0); }
   act_back() { this.seek(this.time - 10); }
   act_fwd() { this.seek(this.time + 10); }
@@ -711,9 +726,7 @@ class Deck {
     r.artist.textContent = t ? `${artistOf(t)}${t.license ? ' · ' + t.license : ''}` : 'Drag a track here or paste an approved link';
     if ((t?.videoId || null) !== this.thumbVid) {
       this.thumbVid = t?.videoId || null;
-      r.thumb.src = this.thumbVid ? thumb(this.thumbVid) : '';
       if (r.remoteImg) r.remoteImg.src = this.thumbVid ? thumb(this.thumbVid).replace('mqdefault', 'hqdefault') : '';
-      r.platter.classList.toggle('empty', !this.thumbVid);
     }
     const playing = this.isPlaying();
     const st = !t ? 'EMPTY' : this.errored ? 'ERROR' : playing ? 'PLAYING' : this.finished ? 'ENDED' : this.ytState === 2 ? 'PAUSED' : 'CUED';
@@ -747,11 +760,11 @@ class Deck {
     const o = other(this);
     const nextReady = !!(o && o.track && !o.played && !o.errored);
     let msg = '';
-    if (S.transitioning && playing && o?.isPlaying()) msg = `MIXING INTO DECK ${S.mixTarget}…`;
-    else if (playing && S.autoDJ && live && nextReady) msg = `AUTO MIX TO ${o.id} IN ${fmt(Math.max(0, rem - S.cfg.fadeSec))}${S.cfg.snapBars && b ? ' · ON THE BAR' : ''}`;
-    else if (playing && S.autoDJ && live) msg = S.queue.length || S.cfg.smartFill ? `AUTO DJ: NEXT SONG LOADING ON DECK ${o.id}` : 'AUTO DJ: QUEUE EMPTY — ADD MUSIC';
-    else if (S.autoDJ && !live && t && !this.played && !this.errored && !playing) msg = `NEXT UP${this.autoPicked ? ' · SMART DJ PICK' : ' · YOUR PICK'} — load or drop a song here to change it`;
-    else if (warn) msg = nextReady ? `ENDING — NEXT ON ${o.id}: ${o.track.title || o.track.videoId}` : `ENDING — NOTHING CUED ON DECK ${o.id}`;
+    if (S.transitioning && playing && o?.isPlaying()) msg = `mixing into ${S.mixTarget}…`;
+    else if (playing && S.autoDJ && live && nextReady) msg = `${S.cfg.mode} mixes to ${o.id} in ${fmt(Math.max(0, rem - S.cfg.fadeSec))}${S.cfg.snapBars && b ? ' · on the bar' : ''}`;
+    else if (playing && S.autoDJ && live) msg = nextInList() || S.cfg.mode === 'auto' ? `next song loading on ${o.id}` : 'end of the list — add songs';
+    else if (S.autoDJ && !live && t && !this.played && !this.errored && !playing) msg = `next up${this.autoPicked ? ' · auto pick' : ''} — drop a song here to change it`;
+    else if (warn) msg = nextReady ? `ending — next on ${o.id}: ${o.track.title || o.track.videoId}` : `ending — nothing cued on ${o.id}`;
     r.mixout.textContent = msg;
 
     // markers only rebuild when they change
@@ -869,15 +882,25 @@ function mixTo(target, secs = S.cfg.fadeSec, { stopOld = true } = {}) {
 
 function mixNow() { mixTo(other(liveDeck())); }
 
+// The one list is S.library, in play order. "Next" = first song not yet played this show and not on a deck.
+function playedThisShow() {
+  const since = showStart();
+  return new Set(S.history.filter(h => h.at >= since).map(h => h.videoId));
+}
+function onDeckIds() { return new Set([decks.A?.track?.id, decks.B?.track?.id].filter(Boolean)); }
+function nextInList() {
+  const played = playedThisShow(), busy = onDeckIds();
+  return S.library.find(t => !t.flag && !played.has(t.videoId) && !busy.has(t.id)) || null;
+}
 function dequeue() {
-  while (S.queue.length) {
-    const q = S.queue.shift();
-    const t = byId(q.id);
-    S.lastAuto = !!q.auto;
-    if (t) { save.queue(); renderQueue(); return t; }
+  S.lastAuto = false;
+  let t = nextInList();
+  if (!t && S.cfg.mode === 'auto') { // list finished: Auto keeps going with fair picks from the writers
+    const s = suggest(1)[0];
+    if (s) { t = s.t; S.lastAuto = true; toast(`End of the list — Auto continues with "${t.title || t.videoId}" (${s.why[0]})`); }
   }
-  save.queue(); renderQueue();
-  return null;
+  renderQueue();
+  return t;
 }
 
 function onDeckEnded(d) {
@@ -885,9 +908,8 @@ function onDeckEnded(d) {
   const n = other(d);
   if (n.isPlaying()) return;
   if (!n.track || n.played || n.errored) {
-    if (!S.queue.length && S.cfg.smartFill) smartFillOne();
     const t = dequeue();
-    if (!t) { toast('Auto DJ: queue is empty', 'bad'); return; }
+    if (!t) { toast('End of the list — add more songs, or switch to Auto to keep going', 'bad'); return; }
     n.load(t, true, S.lastAuto);
   } else n.play();
   setXf(n.id === 'A' ? 0 : 1);
@@ -896,10 +918,16 @@ function onDeckEnded(d) {
 function autoTick() {
   if (!S.autoDJ) return;
   const live = liveDeck(), next = other(live);
+  // Nothing on the live deck yet: line the first song up there (ready to play; Auto starts it).
+  if (!S.transitioning && !live.track && !next.isPlaying()) {
+    const t = dequeue();
+    if (t) live.load(t, S.cfg.mode === 'auto', S.lastAuto);
+    return;
+  }
   // Pre-load the next song onto the idle deck.
   if (!S.transitioning && !next.isPlaying() && (!next.track || next.played || next.errored)) {
-    if (!S.queue.length && S.cfg.smartFill) smartFillOne();
-    if (S.queue.length) { const t = dequeue(); if (t) next.load(t, false, S.lastAuto); }
+    const t = dequeue();
+    if (t) next.load(t, false, S.lastAuto);
   }
   if (S.transitioning) return;
   if (live.isPlaying() && live.dur > 0 && next.ready && next.track && !next.played && !next.errored) {
@@ -917,22 +945,23 @@ function autoTick() {
   }
 }
 
-function setAutoDJ(on) {
-  S.autoDJ = on;
-  $('#autoDJ').classList.toggle('on', on);
-  if (on) {
+function setMode(mode) {
+  if (!['manual', 'assist', 'auto'].includes(mode)) return;
+  S.cfg.mode = mode; save.cfg();
+  $$('.mode [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  if (mode === 'auto') {
     const live = liveDeck();
     if (!live.isPlaying() && !other(live).isPlaying()) {
-      if (!live.track || live.finished || live.errored) {
-        if (!S.queue.length && S.cfg.smartFill) smartFillOne();
+      if (!live.track || live.finished || live.errored || live.played) {
         const t = dequeue();
-        if (t) live.load(t, true, S.lastAuto); else toast('Queue is empty — add approved tracks first', 'bad');
+        if (t) live.load(t, true, S.lastAuto); else toast('The list is empty — add songs first', 'bad');
       } else live.play();
     }
-    toast('Auto DJ ON', 'good');
-  } else toast('Auto DJ OFF — you are driving');
-  renderAll();
+  }
+  toast({ manual: 'MANUAL — you are driving', assist: 'ASSIST — next song lined up, mixed in if you don\'t', auto: 'AUTO — running the show' }[mode], 'good');
+  renderAll(); renderQueue();
 }
+function setAutoDJ(on) { setMode(on ? 'auto' : 'manual'); }
 
 function updateDuck() {
   const want = S.talk || S.voiceTalk;
@@ -994,7 +1023,7 @@ function jitter(vid) {
   return (h % 1000) / 250; // 0..4
 }
 
-function suggest(n = 3, { creatorId = null } = {}) {
+function suggest(n = 3, { creatorId = null, only = null } = {}) {
   const since = showStart();
   const playedNow = new Set(S.history.filter(h => h.at >= since).map(h => h.videoId));
   const busy = new Set([decks.A?.track?.id, decks.B?.track?.id, ...S.queue.map(q => q.id)]);
@@ -1013,7 +1042,7 @@ function suggest(n = 3, { creatorId = null } = {}) {
   const total = Object.values(st).reduce((a, x) => a + x.secs, 0);
   const pct = v => Math.round(v * 100) + '%';
   return S.library
-    .filter(t => !t.flag && !t.noAuto && !S.skip.has(t.videoId) && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
+    .filter(t => !t.flag && (only ? only.has(t.id) : (!t.noAuto && !S.skip.has(t.videoId))) && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
     .map(t => {
       let score = jitter(t.videoId);
       const why = [];
@@ -1049,55 +1078,48 @@ function suggest(n = 3, { creatorId = null } = {}) {
     .slice(0, n);
 }
 
-function smartFillOne() {
-  const s = suggest(1)[0];
-  if (!s || s.score < -50) return false;
-  addToQueue(s.t.id, S.queue.length, true);
-  toast(`Smart DJ queued "${s.t.title || s.t.videoId}" — ${s.why[0]}`);
+// Line-up assistant: arranges the songs still to play (fair writer shares, tempo, energy, new songs first).
+let lineupUndo = null;
+function lineup() {
+  const played = playedThisShow(), busy = onDeckIds();
+  const keep = S.library.filter(t => played.has(t.videoId) || busy.has(t.id));
+  const flagged = S.library.filter(t => t.flag && !keep.includes(t));
+  const pool = S.library.filter(t => !keep.includes(t) && !flagged.includes(t));
+  if (pool.length < 2) { toast('Nothing to arrange yet'); return false; }
+  lineupUndo = S.library.map(t => t.id);
+  const only = new Set(pool.map(t => t.id)), order = [];
+  const savedQueue = S.queue; S.queue = []; // used as "already planned" while picking
+  while (only.size) {
+    const pick = suggest(1, { only })[0];
+    if (!pick) break;
+    order.push(pick.t); only.delete(pick.t.id); S.queue.push({ id: pick.t.id });
+  }
+  S.queue = savedQueue;
+  const rest = pool.filter(t => !order.includes(t));
+  S.library = [...keep, ...order, ...rest, ...flagged];
+  save.library(); renderQueue();
+  $('#lineupUndo').classList.remove('hidden');
+  toast('✨ Line-up ready — writers shared fairly. Drag anything you like, or Undo.', 'good');
   return true;
 }
-
-function renderSmart() {
-  const box = $('#smart');
-  if (!box || !decks.B) return;
-  const picks = suggest(3);
-  box.innerHTML = picks.map(({ t, why }) => {
-    const c = creatorOf(t);
-    return `<div class="sm-card" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" draggable="true">
-      <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
-      <div class="sm-body">
-        <div class="ttl">${esc(t.title || t.videoId)}</div>
-        <div class="sub"><i class="dot"></i>${esc(artistOf(t))} · ${t.duration ? fmt(trackLen(t)) : '?:??'}${t.bpm ? ' · ' + Math.round(t.bpm) + ' BPM' : ''}</div>
-        <div class="chips">${why.slice(0, 3).map(w => `<span class="chip">${esc(w)}</span>`).join('')}</div>
-      </div>
-      <div class="sm-acts">
-        <button type="button" data-s="q" title="Add to the end of the queue">+ Queue</button>
-        <button type="button" data-s="top" title="Play this next (top of the queue)">Next</button>
-        <button type="button" data-s="A" class="la" title="Load onto deck A">A</button>
-        <button type="button" data-s="B" class="lb" title="Load onto deck B">B</button>
-        <button type="button" data-s="skip" class="skip" title="Not now: never suggest this song again during this show">Not now</button>
-      </div>
-    </div>`;
-  }).join('') || '<div class="dim smart-empty">Add songs to your library to get suggestions.</div>';
+function undoLineup() {
+  if (!lineupUndo) return;
+  const pos = new Map(lineupUndo.map((id, i) => [id, i]));
+  S.library.sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+  lineupUndo = null; save.library(); renderQueue();
+  $('#lineupUndo').classList.add('hidden');
+  toast('Line-up undone');
 }
-
-function initSmartUI() {
-  $('#smart').addEventListener('click', e => {
-    const b = e.target.closest('button[data-s]'); if (!b) return;
-    const t = byId(b.closest('.sm-card').dataset.id); if (!t) return;
-    const a = b.dataset.s;
-    if (a === 'q') addToQueue(t.id);
-    else if (a === 'top') addToQueue(t.id, 0);
-    else if (a === 'skip') { S.skip.add(t.videoId); renderSmart(); }
-    else decks[a].userLoad(t);
-  });
-  $('#smart').addEventListener('dragstart', e => {
-    const card = e.target.closest('.sm-card'); if (!card) return;
-    drag = { id: card.dataset.id };
-    e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', card.dataset.id);
-  });
-  $('#smartReroll').onclick = () => { S.smartSeed = (S.smartSeed * 7 + 13) % 100003; renderSmart(); };
+// Put a song right after what is playing (next up).
+function moveToNext(id) {
+  const t = byId(id); if (!t) return;
+  const nxt = nextInList();
+  S.library = S.library.filter(x => x !== t);
+  const at = nxt && nxt !== t ? S.library.indexOf(nxt) : S.library.length;
+  S.library.splice(at < 0 ? S.library.length : at, 0, t);
+  save.library(); renderQueue();
 }
+function renderSmart() { /* suggestions now live in the Line-up button */ }
 
 /* ---------------- creators & new-upload alerts ---------------- */
 
@@ -1204,7 +1226,7 @@ function renderCreators() {
       <div class="cr-air" title="Airtime this show: ${share}% (target ${tgt}%). The white line is the target."><i style="width:${share}%"></i><b style="left:${tgt}%"></b></div>
       <div class="cr-stats">${s.plays} play${s.plays === 1 ? '' : 's'} · ${fmt(s.secs)} on air${s.lastAt ? ` · last ${ago(s.lastAt)}` : ''}</div>
       <div class="cr-acts">
-        <button type="button" data-c="smart" title="Queue the best song from this creator">+ Queue a song</button>
+        <button type="button" data-c="smart" title="Put this writer's best next song up next in the list">Play next</button>
         <button type="button" data-c="check" title="Check this creator for new uploads">🔔</button>
         <button type="button" data-c="edit" title="Edit">✎</button>
         <button type="button" data-c="del" title="Remove creator (their songs stay in the library)">✕</button>
@@ -1222,8 +1244,7 @@ function renderInbox() {
       <div class="grow"><div class="ttl">${esc(i.title || i.videoId)}</div>
         <div class="sub"><i class="dot"></i>${esc(c?.name || 'Unknown')} · ${isFinite(pub) ? 'uploaded ' + ago(pub) : ''}</div></div>
       <button type="button" data-i="watch" title="Watch on YouTube first">↗</button>
-      <button type="button" data-i="ok" class="primary" title="Add to the approved library">✓ Approve</button>
-      <button type="button" data-i="okq" title="Approve and add to the queue">✓ + Queue</button>
+      <button type="button" data-i="ok" class="primary" title="Add to the bottom of the list">✓ Add</button>
       <button type="button" data-i="no" class="danger" title="Not a song / don't want it — hide it for good">Ignore</button></li>`;
   }).join('') || '<li class="dim">Nothing waiting. New uploads from your creators appear here automatically (checked every 30 minutes while not on air).</li>';
   const n = S.inbox.length;
@@ -1232,6 +1253,7 @@ function renderInbox() {
   $('#inboxPill').classList.toggle('hidden', !n);
   $('#crTabCount').textContent = n;
   $('#crTabCount').classList.toggle('hidden', !n);
+  $('#inboxBand')?.classList.toggle('hidden', !n);
 }
 
 function approveInbox(vid, queue) {
@@ -1247,7 +1269,6 @@ function approveInbox(vid, queue) {
     };
     S.library.push(t);
     probeLength(t);
-    if (queue) addToQueue(t.id);
   }
   save.inbox(); save.library();
   renderInbox(); renderLibrary(); renderCreators(); renderSmart();
@@ -1259,7 +1280,7 @@ function initCreatorsUI() {
     $('#crColor').value = DEFAULT_COLORS[S.creators.length % DEFAULT_COLORS.length];
     $('#crShare').value = 25;
     crUpload = ''; $('#crImgPrev').src = NO_IMG;
-    $('#crSave').textContent = 'Add creator'; $('#crCancel').classList.add('hidden');
+    $('#crSave').textContent = 'Add writer'; $('#crCancel').classList.add('hidden');
   };
   resetForm();
   $('#crCancel').onclick = resetForm;
@@ -1299,14 +1320,14 @@ function initCreatorsUI() {
     const a = b.dataset.c;
     if (a === 'smart') {
       const s = suggest(1, { creatorId: c.id })[0];
-      if (s) { addToQueue(s.t.id); toast(`Queued "${s.t.title}"`); } else toast(`No available songs from ${c.name}`);
+      if (s) { moveToNext(s.t.id); toast(`"${s.t.title}" by ${c.name} plays next`); } else toast(`No songs from ${c.name} left to play`);
     } else if (a === 'check') {
       try { const n = await Creators.check(c); renderCreators(); renderInbox(); toast(n ? `${n} new from ${c.name}` : `Nothing new from ${c.name}`); }
       catch (err) { toast(err.message, 'bad'); }
     } else if (a === 'edit') {
       crEditId = c.id; $('#crName').value = c.name; $('#crChannel').value = c.channelId || ''; $('#crColor').value = safeColor(c.color); $('#crShare').value = shareOf(c);
       crUpload = ''; $('#crImgPrev').src = avatarOf(c) || NO_IMG;
-      $('#crSave').textContent = 'Save creator'; $('#crCancel').classList.remove('hidden'); $('#crName').focus();
+      $('#crSave').textContent = 'Save writer'; $('#crCancel').classList.remove('hidden'); $('#crName').focus();
     } else if (a === 'del' && await ask(`Remove creator "${c.name}"? Their songs stay in the library.`, 'Remove')) {
       S.creators = S.creators.filter(x => x !== c);
       S.inbox = S.inbox.filter(i => i.creatorId !== c.id);
@@ -1318,7 +1339,7 @@ function initCreatorsUI() {
     const vid = b.closest('li').dataset.vid;
     const a = b.dataset.i;
     if (a === 'watch') window.open('https://www.youtube.com/watch?v=' + vid, '_blank', 'noopener');
-    else if (a === 'ok' || a === 'okq') { approveInbox(vid, a === 'okq'); toast('Approved and added to the library', 'good'); }
+    else if (a === 'ok') { approveInbox(vid); toast('Added to the bottom of the list', 'good'); }
     else if (a === 'no') {
       S.inbox = S.inbox.filter(x => x.videoId !== vid);
       S.ignored.push(vid); if (S.ignored.length > 2000) S.ignored.splice(0, S.ignored.length - 2000);
@@ -1337,7 +1358,7 @@ function initCreatorsUI() {
     S.ignored.push(...S.inbox.map(i => i.videoId)); S.inbox = [];
     save.inbox(); save.ignored(); renderInbox(); renderCreators();
   };
-  $('#inboxPill').onclick = () => openTab('creators');
+  $('#inboxPill').onclick = () => $('#inboxBand').scrollIntoView({ behavior: 'smooth' });
 }
 
 /* ---------------- stage view: the clean display viewers see ---------------- */
@@ -1506,8 +1527,11 @@ const COMMANDS = {
   xfCenter: ['Crossfader to center', 'c', () => setXf(0.5)],
   xfLeft: ['Nudge crossfader toward A', 'ArrowLeft', () => setXf(S.xf - 0.05)],
   xfRight: ['Nudge crossfader toward B', 'ArrowRight', () => setXf(S.xf + 0.05)],
-  autodj: ['Auto DJ on / off', 'd', () => setAutoDJ(!S.autoDJ)],
-  smart: ['Smart Next: queue the best next song', 'n', () => { if (!smartFillOne()) toast('No suggestions available'); }],
+  autodj: ['Auto on / off (off = Manual)', 'd', () => setMode(S.cfg.mode === 'auto' ? 'manual' : 'auto')],
+  modeManual: ['Manual: you drive', 'm', () => setMode('manual')],
+  modeAssist: ['Assist: next song lined up and mixed in', null, () => setMode('assist')],
+  modeAuto: ['Auto: runs the show', null, () => setMode('auto')],
+  smart: ['✨ Line-up: arrange the rest of the list', 'n', () => lineup()],
   talk: ['Talk-over duck on / off', 't', () => setTalk(!S.talk)],
   talkOn: ['Talk-over duck ON', null, () => setTalk(true)],
   talkOff: ['Talk-over duck OFF', null, () => setTalk(false)],
@@ -1592,26 +1616,21 @@ function buildCredits(mode) {
 let drag = null; // { id, qid? }
 document.addEventListener('dragend', () => { drag = null; $$('.drop, .dragover').forEach(e => e.classList.remove('drop', 'dragover')); });
 
-/* ---------------- queue ---------------- */
+/* ---------------- the one list ---------------- */
 
-function addToQueue(id, index = S.queue.length, auto = false) {
-  const q = { qid: uid(), id };
-  if (auto) q.auto = true;
-  S.queue.splice(index, 0, q);
-  save.queue(); renderQueue();
+// Seconds from now until each song starts (songs still to play, in list order).
+function upcoming() {
+  const played = playedThisShow(), busy = onDeckIds();
+  return S.library.filter(t => !t.flag && !played.has(t.videoId) && !busy.has(t.id));
 }
-function removeFromQueue(qid) {
-  S.queue = S.queue.filter(q => q.qid !== qid);
-  save.queue(); renderQueue();
-}
-
-// Seconds until each queued song is expected to start.
-function queueEtas(items) {
+function listEtas() {
   const live = liveDeck(), next = other(live);
   let eta = 0;
   if (live.isPlaying()) eta += live.remaining();
   if (next.track && !next.played && !next.errored) eta += Math.max(0, trackLen(next.track) - S.cfg.fadeSec);
-  return items.map(t => { const at = eta; eta += Math.max(0, trackLen(t) - S.cfg.fadeSec); return at; });
+  const etas = new Map();
+  for (const t of upcoming()) { etas.set(t.id, eta); eta += Math.max(0, trackLen(t) - S.cfg.fadeSec); }
+  return etas;
 }
 
 function creatorChip(t) {
@@ -1620,60 +1639,77 @@ function creatorChip(t) {
 }
 
 function renderQueue() {
-  const items = S.queue.map(q => ({ q, t: byId(q.id) })).filter(x => x.t);
-  const etas = queueEtas(items.map(x => x.t));
-  $('#queueList').innerHTML = items.map(({ q, t }, i) => {
-    const len = trackLen(t);
-    const c = creatorOf(t);
-    return `<li draggable="true" data-qid="${q.qid}" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" class="cc-row">
-      <span class="num">${i + 1}</span>
-      <div class="qth"><img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy"><span>${len ? fmt(len) : ''}</span></div>
-      <div class="grow"><div class="ttl">${q.auto ? '<span class="auto-tag" title="Picked by Smart DJ. Swap it (⇄), remove it (✕) or drag your own song in front: you have the final say.">SMART</span> ' : ''}${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div><div class="sub">${creatorChip(t)} · ${esc(t.license || 'no permission note')}</div></div>
-      ${t.bpm ? `<span class="len">${Math.round(t.bpm)} BPM</span>` : ''}
-      <span class="eta" title="Estimated start time from now">+${fmt(etas[i])}</span>
-      <span class="len">${len ? fmt(len) : '?:??'}</span>
-      <button type="button" data-q="A" class="la" title="Load onto deck A">A</button><button type="button" data-q="B" class="lb" title="Load onto deck B">B</button>
-      <button type="button" data-q="up" title="Move up">▲</button>
-      <button type="button" data-q="swap" title="Swap for Smart DJ's next-best pick (this one won't be suggested again this show)">⇄</button>
-      <button type="button" data-q="del" title="Remove from queue">✕</button>
+  const list = $('#queueList');
+  if (!list || !decks.B) return;
+  const q = ($('#libSearch')?.value || '').trim().toLowerCase();
+  const played = playedThisShow(), etas = listEtas(), nxt = nextInList();
+  let n = 0;
+  list.innerHTML = S.library.map(t => {
+    n++;
+    if (q && ![t.title, artistOf(t), t.tags, t.notes].join(' ').toLowerCase().includes(q)) return '';
+    const len = trackLen(t), c = creatorOf(t);
+    const onA = decks.A.track?.id === t.id, onB = decks.B.track?.id === t.id;
+    const deck = onA ? decks.A : onB ? decks.B : null;
+    let st = '', tag = '';
+    if (deck && deck.isPlaying()) { st = 'live'; tag = `▶ ON ${deck.id}`; }
+    else if (deck) { st = 'cued'; tag = `ON ${deck.id}`; }
+    else if (t.flag) { st = 'flag'; tag = '⚠ blocked'; }
+    else if (played.has(t.videoId)) { st = 'played'; tag = '✓ played'; }
+    else if (nxt === t) { st = 'next'; tag = 'NEXT'; }
+    const eta = etas.get(t.id);
+    return `<li draggable="true" data-id="${t.id}" class="row ${st}" style="--cc:${safeColor(c?.color)}">
+      <span class="grip" title="Drag to reorder">⋮⋮</span>
+      <span class="num">${n}</span>
+      <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
+      <div class="grow">
+        <div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div>
+        <div class="sub">${creatorChip(t)}${t.bpm ? ' · ' + Math.round(t.bpm) + ' bpm' : ''}${t.flag ? ` · <span class="flag">${esc(t.flag)}</span>` : ''}</div>
+      </div>
+      <span class="tag">${tag}</span>
+      <span class="eta" title="Starts in about">${eta != null ? '+' + fmt(eta) : ''}</span>
+      <span class="len">${len ? fmt(len) : '–:––'}</span>
+      <span class="acts">
+        <button type="button" data-q="A" class="la" title="Load onto deck A">A</button>
+        <button type="button" data-q="B" class="lb" title="Load onto deck B">B</button>
+        <button type="button" data-q="next" title="Play this next">↑</button>
+        ${t.flag ? '<button type="button" data-q="recheck" title="Check again (after Allow embedding was switched on)">↻</button>' : ''}
+        <button type="button" data-q="edit" title="Song details">✎</button>
+        <button type="button" data-q="del" title="Remove from the list">✕</button>
+      </span>
     </li>`;
   }).join('');
-  $('#queueCount').textContent = items.length;
-  $('#queueTime').textContent = fmt(items.reduce((s, x) => s + trackLen(x.t), 0));
-  renderSmart();
+  const left = upcoming();
+  $('#queueCount').textContent = S.library.length;
+  $('#queueTime').textContent = fmt(left.reduce((sum, t) => sum + trackLen(t), 0));
+  $('#listEmpty')?.classList.toggle('hidden', S.library.length > 0);
 }
+function renderLibrary() { renderQueue(); }
 
 // Refresh the ETA column without rebuilding rows (keeps drags and clicks intact).
 function updateQueueEtas() {
-  const rows = $$('#queueList li');
-  const etas = queueEtas(rows.map(li => byId(li.dataset.id)).filter(Boolean));
-  rows.forEach((li, i) => { const e = li.querySelector('.eta'); if (e && etas[i] != null) e.textContent = '+' + fmt(etas[i]); });
+  const etas = listEtas();
+  $$('#queueList li').forEach(li => { const e = li.querySelector('.eta'); if (e) { const v = etas.get(li.dataset.id); e.textContent = v != null ? '+' + fmt(v) : ''; } });
 }
 
 function initQueueUI() {
   const list = $('#queueList');
-  list.addEventListener('click', e => {
+  list.addEventListener('click', async e => {
     const b = e.target.closest('button[data-q]'); if (!b) return;
-    const li = b.closest('li'), qid = li.dataset.qid, id = li.dataset.id;
+    const t = byId(b.closest('li').dataset.id); if (!t) return;
     const act = b.dataset.q;
-    if (act === 'del') removeFromQueue(qid);
-    else if (act === 'swap') {
-      const t = byId(id), q = S.queue.find(x => x.qid === qid);
-      if (t) S.skip.add(t.videoId);
-      const s2 = suggest(1)[0];
-      if (!q || !s2) { toast('No other suggestion available'); renderSmart(); return; }
-      q.id = s2.t.id; q.auto = true;
-      save.queue(); renderQueue();
-      toast(`Swapped for "${s2.t.title || s2.t.videoId}" — ${s2.why[0]}`);
+    if (act === 'A' || act === 'B') decks[act].userLoad(t);
+    else if (act === 'next') { moveToNext(t.id); toast(`"${t.title || t.videoId}" plays next`); }
+    else if (act === 'recheck') recheckSongs([t]);
+    else if (act === 'edit') editTrack(t);
+    else if (act === 'del' && await ask(`Remove "${t.title || t.videoId}" from the list?`, 'Remove')) {
+      S.library = S.library.filter(x => x !== t);
+      save.library(); renderQueue(); renderCreators();
     }
-    else if (act === 'up') {
-      const i = S.queue.findIndex(q => q.qid === qid);
-      if (i > 0) { [S.queue[i - 1], S.queue[i]] = [S.queue[i], S.queue[i - 1]]; save.queue(); renderQueue(); }
-    } else decks[act].userLoad(byId(id)).then(ok => { if (ok) removeFromQueue(qid); });
   });
+  list.addEventListener('dblclick', e => { const li = e.target.closest('li'); if (li && !e.target.closest('button')) { const t = byId(li.dataset.id); if (t) other(liveDeck()).userLoad(t); } });
   list.addEventListener('dragstart', e => {
     const li = e.target.closest('li'); if (!li) return;
-    drag = { id: li.dataset.id, qid: li.dataset.qid };
+    drag = { id: li.dataset.id };
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', li.dataset.id);
   });
   list.addEventListener('dragover', e => {
@@ -1683,41 +1719,23 @@ function initQueueUI() {
   });
   list.addEventListener('drop', e => {
     if (!drag) return; e.preventDefault();
-    const target = e.target.closest('li');
-    let index = target ? S.queue.findIndex(q => q.qid === target.dataset.qid) : S.queue.length;
-    if (drag.qid) {
-      const from = S.queue.findIndex(q => q.qid === drag.qid);
-      const [item] = S.queue.splice(from, 1);
-      if (from < index) index--;
-      S.queue.splice(index < 0 ? S.queue.length : index, 0, item);
-      save.queue(); renderQueue();
-    } else addToQueue(drag.id, index < 0 ? S.queue.length : index);
-    drag = null;
+    const t = byId(drag.id); drag = null;
+    const target = byId(e.target.closest('li')?.dataset.id);
+    if (!t || t === target) { renderQueue(); return; }
+    S.library = S.library.filter(x => x !== t);
+    const at = target ? S.library.indexOf(target) : S.library.length;
+    S.library.splice(at, 0, t);
+    save.library(); renderQueue();
   });
-  // allow dropping library rows on the empty area around the list
-  const body = $('[data-body="queue"]');
-  body.addEventListener('dragover', e => { if (drag && !drag.qid) e.preventDefault(); });
-  body.addEventListener('drop', e => {
-    if (e.target.closest('#queueList')) return;
-    if (drag && !drag.qid) { e.preventDefault(); addToQueue(drag.id); drag = null; }
+  $('#quickAdd').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = $('#quickUrl').value.trim();
+    if (!v) return;
+    if (ingestLinks(v).length) $('#quickUrl').value = '';
+    renderQueue();
   });
-
-  $('#qClear').onclick = async () => { if (S.queue.length && await ask('Clear the whole queue?', 'Clear')) { S.queue = []; save.queue(); renderQueue(); } };
-  $('#qShuffle').onclick = () => {
-    for (let i = S.queue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [S.queue[i], S.queue[j]] = [S.queue[j], S.queue[i]]; }
-    save.queue(); renderQueue();
-  };
-  $('#qSave').onclick = async () => {
-    const name = $('#plName').value.trim();
-    if (!name) { toast('Give the playlist a name'); $('#plName').focus(); return; }
-    if (!S.queue.length) { toast('Queue is empty'); return; }
-    const existing = S.playlists.find(p => p.name.toLowerCase() === name.toLowerCase());
-    if (existing && !(await ask(`Overwrite playlist "${existing.name}"?`, 'Overwrite'))) return;
-    const items = S.queue.map(q => q.id);
-    if (existing) existing.items = items; else S.playlists.push({ id: uid(), name, items });
-    save.playlists(); renderPlaylists(); $('#plName').value = '';
-    toast(`Playlist "${name}" saved`, 'good');
-  };
+  $('#lineupBtn').onclick = lineup;
+  $('#lineupUndo').onclick = undoLineup;
 }
 
 /* ---------------- library ---------------- */
@@ -1801,7 +1819,7 @@ function saveLibForm(e) {
     probeLength(t);
   }
   Object.keys(t).forEach(k => { if (t[k] === undefined) delete t[k]; });
-  save.library(); save.inbox(); resetLibForm(); renderLibrary(); renderQueue(); renderCreators(); renderInbox();
+  save.library(); save.inbox(); resetLibForm(); $('#songEdit').classList.add('hidden'); renderQueue(); renderCreators(); renderInbox();
   Object.values(decks).forEach(d => d.render());
 }
 
@@ -1820,76 +1838,22 @@ function editTrack(t) {
   $('#libSave').textContent = 'Save changes';
   $('#libCancel').classList.remove('hidden');
   $('#libInfo').textContent = '';
-  $('#libUrl').focus();
-}
-
-function renderLibrary() {
-  const q = $('#libSearch').value.trim().toLowerCase();
-  const rows = S.library
-    .filter(t => !q || [t.title, artistOf(t), t.tags, t.license, t.notes].join(' ').toLowerCase().includes(q))
-    .sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0) || (a.title || '').localeCompare(b.title || ''));
-  $('#libBody').innerHTML = rows.map(t => {
-    const c = creatorOf(t);
-    return `<tr draggable="true" data-id="${t.id}" style="--cc:${safeColor(c?.color)}">
-      <td><img class="th lib-th" src="${thumb(t.videoId)}" alt="" loading="lazy"></td>
-      <td><div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}<b>${esc(t.title || t.videoId)}</b></div>
-        <div class="dim">${creatorChip(t)}${t.tags ? ' · ' + esc(t.tags) : ''}${t.noAuto ? ' · <span class="manual-tag">manual only</span>' : ''}</div>
-        ${t.flag ? `<div class="flag">⚠ ${esc(t.flag)}</div>` : ''}</td>
-      <td class="dim">${t.duration ? fmt(t.duration) : '?:??'}</td>
-      <td class="dim">${t.bpm ? Math.round(t.bpm) : '—'}</td>
-      <td class="energy" title="Energy ${t.energy || '?'} of 5">${t.energy ? '●'.repeat(t.energy) + '<span class="dim">' + '●'.repeat(5 - t.energy) + '</span>' : '<span class="dim">—</span>'}</td>
-      <td class="dim">${esc(t.license || '—')}${t.approvedOn ? `<br><small>${esc(t.approvedOn)}</small>` : ''}</td>
-      <td class="dim">${t.plays || 0}</td>
-      <td class="acts">
-        <button type="button" data-l="A" class="la" title="Load onto deck A">A</button>
-        <button type="button" data-l="B" class="lb" title="Load onto deck B">B</button>
-        <button type="button" data-l="q" title="Add to the queue">+Q</button>
-        <button type="button" data-l="auto" class="${t.noAuto ? 'off' : ''}" title="${t.noAuto ? 'Manual only: Smart DJ will never pick this song. Click to allow.' : 'Smart DJ may pick this song. Click to make it manual only.'}">🤖</button>
-        ${t.flag ? '<button type="button" data-l="recheck" class="recheck" title="Check again whether this song plays in the mixer (after embedding was switched on)">↻</button>' : ''}
-        <button type="button" data-l="open" title="Open on YouTube">↗</button>
-        <button type="button" data-l="edit" title="Edit details, BPM and energy">✎</button>
-        <button type="button" data-l="del" title="Remove from the approved library">✕</button>
-      </td></tr>`;
-  }).join('');
-  $('#libCount').textContent = S.library.length;
+  $('#songEdit').classList.remove('hidden');
+  $('#libTitle').focus();
 }
 
 function initLibraryUI() {
   resetLibForm();
   $('#libForm').addEventListener('submit', saveLibForm);
   $('#libFetch').onclick = fetchInfo;
-  $('#libCancel').onclick = resetLibForm;
-  $('#libSearch').addEventListener('input', renderLibrary);
+  $('#libCancel').onclick = () => { resetLibForm(); $('#songEdit').classList.add('hidden'); };
+  $('#libSearch').addEventListener('input', renderQueue);
   $('#libCreator').addEventListener('change', e => {
     const c = creatorById(e.target.value);
     if (c && !$('#libLicense').value) $('#libLicense').value = 'Full permission — creator';
     if (c && !$('#libArtist').value) $('#libArtist').value = c.name;
   });
-  $('#libBody').addEventListener('click', async e => {
-    const b = e.target.closest('button[data-l]'); if (!b) return;
-    const t = byId(b.closest('tr').dataset.id); if (!t) return;
-    const a = b.dataset.l;
-    if (a === 'A' || a === 'B') decks[a].userLoad(t);
-    else if (a === 'q') { addToQueue(t.id); toast(`Queued "${t.title || t.videoId}"`); }
-    else if (a === 'recheck') { recheckSongs([t]); }
-    else if (a === 'auto') {
-      if (t.noAuto) delete t.noAuto; else t.noAuto = true;
-      save.library(); renderLibrary(); renderSmart();
-      toast(t.noAuto ? `"${t.title}" is manual only — Smart DJ won't pick it` : `Smart DJ may pick "${t.title}" again`);
-    }
-    else if (a === 'open') window.open('https://www.youtube.com/watch?v=' + t.videoId, '_blank', 'noopener');
-    else if (a === 'edit') editTrack(t);
-    else if (a === 'del' && await ask(`Remove "${t.title || t.videoId}" from the approved library?`, 'Remove')) {
-      S.library = S.library.filter(x => x !== t);
-      S.queue = S.queue.filter(q => q.id !== t.id);
-      save.library(); save.queue(); renderLibrary(); renderQueue(); renderCreators();
-    }
-  });
-  $('#libBody').addEventListener('dragstart', e => {
-    const tr = e.target.closest('tr'); if (!tr) return;
-    drag = { id: tr.dataset.id };
-    e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', tr.dataset.id);
-  });
+  $('#songEditClose').onclick = () => { $('#songEdit').classList.add('hidden'); resetLibForm(); };
   $('#libRecheck').onclick = () => {
     const flagged = S.library.filter(t => t.flag);
     if (!flagged.length) { toast('No ⚠ songs — everything plays', 'good'); return; }
@@ -1957,7 +1921,7 @@ function ingestLinks(text) {
   });
   S.inbox = S.inbox.filter(i => !vids.includes(i.videoId));
   save.library(); save.inbox(); renderLibrary(); renderInbox(); renderCreators();
-  toast(added ? `Added ${added} new song${added === 1 ? '' : 's'} to your library` : `${tracks.length} song${tracks.length === 1 ? '' : 's'} from your library`, 'good');
+  toast(added ? `Added ${added} song${added === 1 ? '' : 's'} to the bottom of the list` : `Already in the list`, 'good');
   return tracks;
 }
 
@@ -2002,8 +1966,8 @@ document.addEventListener('drop', e => {
   const where = e.target.closest?.('.dz')?.dataset.dz || (deckEl ? (deckEl.classList.contains('deck-a') ? 'A' : 'B') : 'Q');
   const tracks = ingestLinks(droppedText(e));
   if (!tracks.length) return;
-  if (where === 'Q') { tracks.forEach(t => addToQueue(t.id)); toast(`Queued ${tracks.length} song${tracks.length === 1 ? '' : 's'}`, 'good'); }
-  else { decks[where].userLoad(tracks[0]); tracks.slice(1).forEach(t => addToQueue(t.id)); }
+  if (where !== 'Q') decks[where].userLoad(tracks[0]);
+  renderQueue();
 });
 
 document.addEventListener('paste', e => {
@@ -2011,9 +1975,8 @@ document.addEventListener('paste', e => {
   const text = e.clipboardData?.getData('text') || '';
   if (!ytUrls(text).length) return;
   e.preventDefault();
-  const tracks = ingestLinks(text);
-  tracks.forEach(t => addToQueue(t.id));
-  if (tracks.length) toast(`Queued ${tracks.length} song${tracks.length === 1 ? '' : 's'}`, 'good');
+  ingestLinks(text);
+  renderQueue();
 });
 
 /* ---------------- import a music list (Rundown console, spreadsheet, text) ---------------- */
@@ -2221,18 +2184,12 @@ function addImport() {
     ids.push(t.id);
   });
   if (!ids.length) { toast('Nothing checked'); return; }
-  if ($('#impQueue').checked) ids.forEach(id => S.queue.push({ qid: uid(), id }));
-  const plName = $('#impPlName').value.trim();
-  if ($('#impPl').checked && plName) {
-    const ex = S.playlists.find(p => p.name.toLowerCase() === plName.toLowerCase());
-    if (ex) ex.items = ids; else S.playlists.push({ id: uid(), name: plName, items: ids });
-  }
   S.inbox = S.inbox.filter(i => !ids.some(id => byId(id)?.videoId === i.videoId));
   save.library(); save.queue(); save.playlists(); save.inbox();
   renderEverything();
   $('#imp').classList.add('hidden');
   impItems = []; $('#impText').value = ''; $('#impInfo').textContent = ''; $('#impPreview').classList.add('hidden');
-  toast(`Imported: ${added} new song${added === 1 ? '' : 's'}, ${ids.length - added} already in library${$('#impPl').checked && plName ? ` · playlist "${plName}" saved` : ''}`, 'good');
+  toast(`Imported: ${added} new song${added === 1 ? '' : 's'} added to the bottom of the list${ids.length - added ? `, ${ids.length - added} already there` : ''}`, 'good');
 }
 
 function initImportUI() {
@@ -2255,30 +2212,8 @@ function initImportUI() {
 
 /* ---------------- playlists ---------------- */
 
-function renderPlaylists() {
-  $('#plList').innerHTML = S.playlists.map(p => {
-    const tracks = p.items.map(byId).filter(Boolean);
-    const len = tracks.reduce((s, t) => s + trackLen(t), 0);
-    return `<li data-id="${p.id}"><div class="grow"><div class="ttl">${esc(p.name)}</div>
-      <div class="sub">${tracks.length} tracks · ${fmt(len)}</div></div>
-      <button type="button" data-p="load" title="Replace the queue with this playlist">Load</button>
-      <button type="button" data-p="append" title="Add this playlist to the end of the queue">Append</button>
-      <button type="button" data-p="del" class="danger" title="Delete playlist">✕</button></li>`;
-  }).join('') || '<li class="dim">No playlists yet.</li>';
-}
-
-function initPlaylistsUI() {
-  $('#plList').addEventListener('click', async e => {
-    const b = e.target.closest('button[data-p]'); if (!b) return;
-    const p = S.playlists.find(x => x.id === b.closest('li').dataset.id); if (!p) return;
-    const a = b.dataset.p;
-    if (a === 'del') { if (await ask(`Delete playlist "${p.name}"?`, 'Delete')) { S.playlists = S.playlists.filter(x => x !== p); save.playlists(); renderPlaylists(); } return; }
-    if (a === 'load') { if (S.queue.length && !(await ask('Replace the current queue?', 'Replace'))) return; S.queue = []; }
-    p.items.filter(byId).forEach(id => S.queue.push({ qid: uid(), id }));
-    save.queue(); renderQueue(); openTab('queue');
-    toast(`Playlist "${p.name}" ${a === 'load' ? 'loaded' : 'appended'}`, 'good');
-  });
-}
+function renderPlaylists() { /* one list: no playlists */ }
+function initPlaylistsUI() { /* one list: no playlists */ }
 
 /* ---------------- history ---------------- */
 
@@ -2401,10 +2336,10 @@ function initSettingsUI() {
 /* ---------------- mixer UI ---------------- */
 
 function renderMeters() {
-  const set = (sel, d) => { $(sel).style.height = (d && d.isPlaying() ? d.out * 100 : 0) + '%'; };
+  const set = (sel, d) => { $(sel).style.width = (d && d.isPlaying() ? d.out * 100 : 0) + '%'; };
   set('#meterA i', decks.A); set('#meterB i', decks.B);
   const m = Math.max(decks.A.isPlaying() ? decks.A.out : 0, decks.B.isPlaying() ? decks.B.out : 0);
-  $('#meterM i').style.height = m * 100 + '%';
+  $('#meterM i').style.width = m * 100 + '%';
   $('#volAVal').textContent = S.cfg.volA;
   $('#volBVal').textContent = S.cfg.volB;
   $('#masterVal').textContent = S.cfg.master;
@@ -2427,7 +2362,7 @@ function initMixerUI() {
   $('#fadeSec').value = S.cfg.fadeSec; $('#curve').value = S.cfg.curve;
   $('#duckLevel').value = S.cfg.duckLevel; $('#duckVal').textContent = S.cfg.duckLevel + '%';
   $('#voiceThresh').value = S.cfg.voiceThresh; $('#micThreshMark').style.left = S.cfg.voiceThresh + '%';
-  $('#snapBars').checked = S.cfg.snapBars; $('#smartFill').checked = S.cfg.smartFill;
+  $('#snapBars').checked = S.cfg.snapBars;
 
   $('#volA').oninput = e => setDeckVol('A', +e.target.value);
   $('#volB').oninput = e => setDeckVol('B', +e.target.value);
@@ -2436,10 +2371,9 @@ function initMixerUI() {
   $('#curve').onchange = e => { S.cfg.curve = e.target.value; save.cfg(); applyVolumes(); };
   $('#fadeSec').onchange = e => { S.cfg.fadeSec = clamp(+e.target.value || 0, 0, 30); e.target.value = S.cfg.fadeSec; save.cfg(); };
   $('#snapBars').onchange = e => { S.cfg.snapBars = e.target.checked; save.cfg(); };
-  $('#smartFill').onchange = e => { S.cfg.smartFill = e.target.checked; save.cfg(); };
   $$('.xf-snap button').forEach(b => { b.onclick = () => setXf(+b.dataset.xf); });
   $('#mixNow').onclick = mixNow;
-  $('#autoDJ').onclick = () => setAutoDJ(!S.autoDJ);
+  $$('.mode [data-mode]').forEach(b => { b.onclick = () => setMode(b.dataset.mode); b.classList.toggle('on', b.dataset.mode === S.cfg.mode); });
   $('#talk').onclick = () => setTalk(!S.talk);
   $('#onair').onclick = toggleOnAir;
   $('#panic').onclick = panic;
@@ -2461,6 +2395,7 @@ function initMixerUI() {
 /* ---------------- tabs ---------------- */
 
 function openTab(name) {
+  if (name === 'queue' || name === 'library') { $('.listpanel').scrollIntoView({ behavior: 'smooth' }); return; }
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $$('.tab-body').forEach(b => b.classList.toggle('hidden', b.dataset.body !== name));
 }
@@ -2523,11 +2458,29 @@ document.addEventListener('error', e => {
   if (img.tagName === 'IMG' && img.src !== NO_IMG && !img.closest('.platter')) img.src = NO_IMG;
 }, true);
 
+// First run: set up the show's writers (channel links are added once in the Writers tab).
+function seedWriters() {
+  if (S.creators.length) return;
+  S.creators = [['Ivan', 40, '#22d3ee'], ['Lance', 20, '#ff7a3d'], ['Lise', 20, '#a78bfa'], ['Rhonda', 20, '#2ee59d']]
+    .map(([name, share, color]) => ({ id: uid(), name, share, color, channelId: '' }));
+  save.creators();
+}
+// Older versions had a separate queue: its songs move to the top of the one list, in that order.
+function foldQueueIntoList() {
+  if (!S.queue.length) return;
+  const ids = S.queue.map(q => q.id);
+  const first = ids.map(byId).filter(Boolean);
+  S.library = [...new Set([...first, ...S.library])];
+  S.queue = []; save.queue(); save.library();
+}
+
 function boot() {
+  seedWriters(); foldQueueIntoList();
+  document.body.classList.toggle('local-players', !S.cfg.viewerTab);
   decks.A = new Deck('A', $('#mountA'));
   decks.B = new Deck('B', $('#mountB'));
   Tip.init();
-  initMixerUI(); initQueueUI(); initSmartUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
+  initMixerUI(); initQueueUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab); });
   renderEverything(); renderVersion(); syncXfUI(); applyVolumes();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
@@ -2549,6 +2502,8 @@ function boot() {
     if (!S.ytReady) { const p = $('#ytStatus'); p.textContent = 'YouTube: not loading — check internet'; p.className = 'pill bad'; }
   }, 10000);
 
+  // Closing the mixer: save the latest changes to disk straight away.
+  window.addEventListener('pagehide', () => { if (Disk.ok && Disk.dirty) { clearTimeout(Disk.timer); Disk.push(true); } });
   window.addEventListener('beforeunload', e => {
     if (decks.A.isPlaying() || decks.B.isPlaying() || S.onAir) { e.preventDefault(); e.returnValue = ''; }
   });

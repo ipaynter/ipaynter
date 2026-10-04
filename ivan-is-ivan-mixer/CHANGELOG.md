@@ -18,6 +18,22 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.1.0 — 2026-10-04 — Easy like Sunday morning
+Commit: see the commit titled *“v3.1.0: one list, three modes, new look”*
+- **New look:** calm, flat and compact. Small decks, an inline crossover mixer, and slim faders.
+- **One list for all the music**, in play order and always on screen. It replaces the separate queue, library and playlists. Each row shows the song's picture, writer, status (playing, on a deck, NEXT, ✓ played, ⚠ blocked), start time and length. Drag to reorder, ↑ plays a song next, and ✎ opens its details.
+- **Manual · Assist · Auto:**
+  - **Manual** is you DJing.
+  - **Assist** lines up the next song and mixes it in if you don't.
+  - **Auto** runs the show and keeps going with fair picks when the list runs out.
+
+  One click switches, so you can take over at any time.
+- **✨ Line-up assistant** arranges the songs still to play (writers' shares, tempo, energy). Undo puts the list back.
+- **Your writers are ready:** Ivan (40%), Lance, Lise and Rhonda (20% each). New songs from them appear above the list, and ✓ Add puts them at the bottom.
+- Adding a link, pasting, dragging or importing always puts songs at the bottom of the list.
+- Your old queue is folded into the top of the list automatically. Nothing is lost.
+- Changes reach the disk copy almost instantly, and are saved even if you close the mixer straight after a change.
+
 ## v3.0.0 — 2026-10-04 — Separate Viewer tab
 Commit: `de22d6c`
 - **The viewer page is now its own Chrome tab and no longer covers the mixer.** POWER ON opens it automatically. Click it once, then share **that tab** in StreamYard with *Also share tab audio*.

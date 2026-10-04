@@ -4,219 +4,150 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=3.0.0">
+<link rel="stylesheet" href="styles.css?v=3.1.0">
 </head>
 <body>
 
-<!-- Power-on splash: Chrome needs one click before it allows audio -->
+<!-- Power-on: Chrome needs one click before it allows sound -->
 <div id="splash" class="splash">
   <div class="splash-inner">
     <div class="logo-big">IVAN <em>is</em> IVAN</div>
-    <div class="logo-sub">LIVE MIXER</div>
+    <div class="logo-sub">live mixer</div>
     <div class="ver-splash" data-ver></div>
-    <button id="power" class="power" type="button">⏻ POWER ON</button>
-    <p class="hint">One click wakes up the audio. Approved music only.</p>
-    <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Close it and start the mixer with <b>start-windows.bat</b> (or <b>start-mac-linux.sh</b>).</p>
+    <button id="power" class="power" type="button">Power on</button>
+    <p class="hint">One click wakes up the sound and opens the Viewer tab.</p>
+    <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Start the mixer with the desktop button or <b>start-windows.bat</b>.</p>
   </div>
 </div>
 
 <header class="topbar">
-  <div class="brand"><span class="brand-dot"></span>IVAN <em>is</em> IVAN <small>LIVE MIXER</small> <span class="ver" data-ver title="App version. See CHANGELOG.md for what changed in each version."></span></div>
-  <div class="top-center">
-    <button id="onair" class="onair" type="button" data-cmd="onair" title="Starts the show timer and arms the dead-air alarm. Press it when you go live in StreamYard.">ON AIR</button>
-    <div class="clock-box" title="How long you have been on air"><label>SHOW</label><span id="showTimer">0:00:00</span></div>
-    <div class="clock-box" title="Time of day"><label>CLOCK</label><span id="clock">--:--:--</span></div>
-    <div class="clock-box" title="Total length of everything in the queue"><label>QUEUE</label><span id="queueTime">0:00</span></div>
-    <button id="stageBtn" class="stage-btn" type="button" data-cmd="stage" title="Opens (or shows) the Viewer tab: the full YouTube video with the creator badge. The music plays there, so share THAT tab in StreamYard with tab audio. The mixer stays here.">◉ VIEWER TAB</button>
+  <div class="brand">IVAN <em>is</em> IVAN <span class="ver" data-ver title="App version. See CHANGELOG.md."></span></div>
+  <button id="onair" class="onair" type="button" data-cmd="onair" title="Starts the show clock. Press it when you go live in StreamYard.">ON AIR</button>
+  <div class="clocks">
+    <span title="Show time"><label>show</label><b id="showTimer">0:00:00</b></span>
+    <span title="Clock"><label>clock</label><b id="clock">--:--</b></span>
+    <span title="Music still to play in the list"><label>left</label><b id="queueTime">0:00</b></span>
   </div>
-  <div class="top-right">
-    <button id="inboxPill" class="pill pill-btn hidden" type="button" title="New uploads from your creators are waiting for approval">🔔 <span id="inboxPillN">0</span> new</button>
-    <button id="viewerStatus" class="pill pill-btn hidden" type="button" title="The Viewer tab plays the music and video for StreamYard. Click to open or show it.">Viewer tab: …</button>
-    <span id="diskStatus" class="pill" title="Your library is also saved to the data folder next to the app, so clearing Chrome cannot lose it">Disk: …</span>
-    <span id="remoteStatus" class="pill" title="Stream Deck buttons work when the mixer is started with the start script">Stream Deck: …</span>
-    <span id="ytStatus" class="pill" title="Status of the YouTube player connection">YouTube: loading…</span>
-    <button id="helpBtn" class="pill pill-btn" type="button" title="Quick start guide">?</button>
-  </div>
+  <span class="spacer"></span>
+  <button id="inboxPill" class="pill pill-btn hidden" type="button" title="New songs from your writers are waiting for your OK">🔔 <span id="inboxPillN">0</span> new</button>
+  <button id="stageBtn" class="pill pill-btn" type="button" data-cmd="stage" title="Show the Viewer tab: the full video with the creator badge. Share THAT tab in StreamYard with tab audio.">Viewer tab</button>
+  <button id="viewerStatus" class="pill pill-btn hidden" type="button" title="The Viewer tab plays the music and video for StreamYard. Click to open or show it.">…</button>
+  <span id="diskStatus" class="pill" title="Your list is also saved to the data folder next to the app">Disk</span>
+  <span id="remoteStatus" class="pill" title="Stream Deck buttons work when the mixer is started with the desktop button">Deck</span>
+  <span id="ytStatus" class="pill" title="YouTube connection">YouTube</span>
+  <button id="helpBtn" class="pill pill-btn" type="button" title="Quick start">?</button>
 </header>
 
-<div id="deadAir" class="dead-air hidden">⚠ DEAD AIR — NO MUSIC PLAYING</div>
+<div id="deadAir" class="dead-air hidden">No music playing</div>
 
 <main class="console">
   <div id="mountA" class="deck-mount"></div>
 
   <section class="mixer">
-    <div class="panel-label">MIXER</div>
-
-    <div class="bpm-match" id="bpmMatch" title="Tempo of each deck (from TAP). Within about 4% sounds smooth when the songs overlap.">
-      <span class="bm-a">A <b id="bmA">—</b></span><span id="bmDelta" class="bm-d">TEMPO</span><span class="bm-b"><b id="bmB">—</b> B</span>
+    <div class="mode" role="group" aria-label="Who is driving">
+      <button type="button" data-mode="manual" data-cmd="modeManual" title="MANUAL: you DJ. Nothing happens by itself; the list just shows what's next.">Manual</button>
+      <button type="button" data-mode="assist" data-cmd="modeAssist" title="ASSIST: lines up the next song on the free deck and mixes it in when a song ends, if you haven't. You read the room and can change anything.">Assist</button>
+      <button type="button" data-mode="auto" data-cmd="modeAuto" title="AUTO: runs the show by itself down your list. When the list runs out it keeps going with fair picks from your writers. Press Manual to take over.">Auto</button>
     </div>
 
-    <div class="channels">
-      <div class="channel ch-a">
-        <label>A</label>
-        <div class="fader-row">
-          <div class="meter" id="meterA"><i></i></div>
-          <input type="range" class="vfader" id="volA" min="0" max="100" value="80" aria-label="Deck A volume" data-cmd="volAUp" title="Deck A channel volume">
-        </div>
-        <span class="val" id="volAVal">80</span>
-      </div>
-      <div class="channel ch-m">
-        <label>MASTER</label>
-        <div class="fader-row">
-          <div class="meter" id="meterM"><i></i></div>
-          <input type="range" class="vfader" id="master" min="0" max="100" value="90" aria-label="Master volume" data-cmd="masterUp" title="Master volume for all music. Set it so music sits under your voice.">
-        </div>
-        <span class="val" id="masterVal">90</span>
-      </div>
-      <div class="channel ch-b">
-        <label>B</label>
-        <div class="fader-row">
-          <div class="meter" id="meterB"><i></i></div>
-          <input type="range" class="vfader" id="volB" min="0" max="100" value="80" aria-label="Deck B volume" data-cmd="volBUp" title="Deck B channel volume">
-        </div>
-        <span class="val" id="volBVal">80</span>
-      </div>
+    <div class="xf">
+      <b class="xa">A</b>
+      <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader" data-cmd="xfRight" title="Crossfader: left plays A, right plays B">
+      <b class="xb">B</b>
     </div>
-    <div class="meter-note">Meters show the level sent to each YouTube player.</div>
-
-    <div class="talk-block">
-      <button id="talk" class="btn talk" type="button" data-cmd="talk" title="Talk-over: dips the music to the 'Duck to' level while you speak. Press again to bring it back.">🎙 TALK</button>
-      <div class="talk-opts">
-        <label title="How quiet the music gets while you talk">Duck to <b id="duckVal">25%</b>
-          <input type="range" id="duckLevel" min="0" max="70" value="25"></label>
-        <label class="check" title="Listens to your mic LEVEL only (never records) and ducks the music automatically while you talk. Wear headphones."><input type="checkbox" id="voiceDuck"> Voice auto-duck (mic)</label>
-        <div class="mic-row">
-          <div class="mini-meter" id="micMeter" title="Your mic level. The yellow line is the trigger point."><i></i><b id="micThreshMark"></b></div>
-          <input type="range" id="voiceThresh" min="5" max="90" value="35" title="Voice trigger level: raise it if noise ducks the music, lower it if your voice doesn't">
-        </div>
-      </div>
+    <div class="row">
+      <button id="mixNow" class="btn mixnow" type="button" data-cmd="mix" title="Crossfade to the other deck now (fade time), then stop the old deck">Mix ⇄</button>
+      <label class="fade" title="Crossfade length">fade <input type="number" id="fadeSec" min="0" max="30" step="1" value="8">s</label>
+      <select id="curve" title="Crossfader curve">
+        <option value="smooth">smooth</option>
+        <option value="linear">linear</option>
+        <option value="cut">cut</option>
+      </select>
     </div>
 
-    <div class="auto-block">
-      <button id="autoDJ" class="btn autodj" type="button" data-cmd="autodj" title="Auto DJ: plays the queue, preloads the next song and crossfades on the bar. With Smart fill on, it picks great next songs when the queue runs out.">AUTO DJ</button>
-      <button id="mixNow" class="btn mixnow" type="button" data-cmd="mix" title="Crossfade to the other deck now over the FADE time, then stop the old deck">MIX ⇄</button>
-      <label class="fade" title="Crossfade length in seconds">FADE <input type="number" id="fadeSec" min="0" max="30" step="1" value="8"> s</label>
-    </div>
-    <div class="auto-opts">
-      <label class="check" title="When tempo + downbeat are known, Auto DJ waits for the start of a bar before mixing"><input type="checkbox" id="snapBars"> Mix on the bar</label>
-      <label class="check" title="ON: when the queue is empty, Auto DJ adds the best Smart Next pick. OFF: Smart DJ only suggests and nothing plays unless you queue it."><input type="checkbox" id="smartFill"> Smart fill</label>
+    <div class="faders">
+      <label class="fd fd-a" title="Deck A volume"><span>A</span><input type="range" id="volA" min="0" max="100" value="80" data-cmd="volAUp"><i class="meter" id="meterA"><i></i></i><em id="volAVal">80</em></label>
+      <label class="fd fd-b" title="Deck B volume"><span>B</span><input type="range" id="volB" min="0" max="100" value="80" data-cmd="volBUp"><i class="meter" id="meterB"><i></i></i><em id="volBVal">80</em></label>
+      <label class="fd fd-m" title="Master volume: set it so the music sits under your voice"><span>M</span><input type="range" id="master" min="0" max="100" value="90" data-cmd="masterUp"><i class="meter" id="meterM"><i></i></i><em id="masterVal">90</em></label>
     </div>
 
-    <div class="xfader-wrap">
-      <div class="xf-head">
-        <span class="xf-a">A</span>
-        <select id="curve" title="Crossfader curve. Smooth keeps the volume even through the mix. Scratch cut switches almost instantly.">
-          <option value="smooth">Smooth (constant power)</option>
-          <option value="linear">Linear</option>
-          <option value="cut">Scratch cut</option>
-        </select>
-        <span class="xf-b">B</span>
+    <div class="row">
+      <button id="talk" class="btn talk" type="button" data-cmd="talk" title="Talk-over: dips the music while you speak. Press again to bring it back.">🎙 Talk</button>
+      <label class="duck" title="How quiet the music gets while you talk">to <b id="duckVal">25%</b><input type="range" id="duckLevel" min="0" max="70" value="25"></label>
+    </div>
+
+    <details class="more-mix">
+      <summary>more</summary>
+      <label class="check" title="Listens to your mic LEVEL only (never records) and dips the music while you talk. Wear headphones."><input type="checkbox" id="voiceDuck"> voice auto-duck</label>
+      <div class="mic-row">
+        <div class="mini-meter" id="micMeter" title="Mic level; the line is the trigger point"><i></i><b id="micThreshMark"></b></div>
+        <input type="range" id="voiceThresh" min="5" max="90" value="35" title="Voice trigger level">
       </div>
-      <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader" data-cmd="xfRight" title="Crossfader: left plays deck A, right plays deck B">
+      <label class="check" title="When tempo and downbeat are set, mixes start on the bar"><input type="checkbox" id="snapBars"> mix on the bar</label>
+      <div class="bpm-match" id="bpmMatch" title="Tempo of each deck. Within about 4% blends smoothly."><span>A <b id="bmA">—</b></span><span id="bmDelta" class="bm-d">tempo</span><span><b id="bmB">—</b> B</span></div>
       <div class="xf-snap">
-        <button type="button" data-xf="0" data-cmd="xfA" title="Snap crossfader to A">◀ A</button>
-        <button type="button" data-xf="0.5" data-cmd="xfCenter" title="Crossfader to the middle (both decks)">CENTER</button>
-        <button type="button" data-xf="1" data-cmd="xfB" title="Snap crossfader to B">B ▶</button>
+        <button type="button" data-xf="0" data-cmd="xfA">◀ A</button>
+        <button type="button" data-xf="0.5" data-cmd="xfCenter">mid</button>
+        <button type="button" data-xf="1" data-cmd="xfB">B ▶</button>
       </div>
-    </div>
+    </details>
 
-    <button id="panic" class="btn panic" type="button" data-cmd="panic" title="Emergency: fades all music out in 2 seconds and stops both decks">FADE ALL OUT</button>
+    <button id="panic" class="btn panic" type="button" data-cmd="panic" title="Emergency: fades all music out in 2 seconds">fade all out</button>
   </section>
 
   <div id="mountB" class="deck-mount"></div>
 </main>
 
-<section class="browser">
-  <nav class="tabs">
-    <button type="button" data-tab="queue" class="active" title="Songs lined up to play, plus Smart Next suggestions">QUEUE <span id="queueCount" class="count">0</span></button>
-    <button type="button" data-tab="library" title="Your approved music list">APPROVED LIBRARY <span id="libCount" class="count">0</span></button>
-    <button type="button" data-tab="creators" title="Your creators, their airtime this show, and their new uploads">CREATORS <span id="crTabCount" class="count hot hidden">0</span></button>
-    <button type="button" data-tab="playlists" title="Saved queues">PLAYLISTS</button>
-    <button type="button" data-tab="history" title="Everything played, and credits for your YouTube description">PLAY LOG &amp; CREDITS</button>
-    <button type="button" data-tab="settings" title="Settings, backup and Stream Deck buttons">SETTINGS &amp; STREAM DECK</button>
-  </nav>
-
-  <!-- QUEUE -->
-  <div class="tab-body" data-body="queue">
-    <div class="smart-head">
-      <span class="sec">SMART NEXT</span>
-      <span class="dim">Picks rotate creators fairly, match tempo and energy, and favor new releases.</span>
-      <span class="spacer"></span>
-      <button type="button" id="smartReroll" title="Show different suggestions">↻ Other ideas</button>
-    </div>
-    <div id="smart" class="smart"></div>
-    <div class="bar-row">
-      <span class="dim"><b>Drag a YouTube link here</b> (from YouTube or your Rundown page) or press <b>Ctrl+V</b> anywhere to queue it. Drag rows to reorder, or onto a deck to load.</span>
-      <span class="spacer"></span>
-      <button type="button" id="qShuffle" title="Shuffle the queue order">Shuffle</button>
-      <button type="button" id="qClear" class="danger" title="Remove everything from the queue">Clear</button>
-      <input id="plName" placeholder="Playlist name" title="Name for saving this queue as a playlist">
-      <button type="button" id="qSave" title="Save the current queue as a playlist">Save as playlist</button>
-    </div>
-    <ol id="queueList" class="list queue-list"></ol>
+<!-- THE LIST: all of the show's music, in play order -->
+<section class="listpanel">
+  <div class="list-head">
+    <h2>The list <span id="queueCount" class="count">0</span></h2>
+    <form id="quickAdd" class="quick-add" autocomplete="off">
+      <input id="quickUrl" placeholder="Paste a YouTube link and press Enter (or drag one in)" title="Adds the song to the bottom of the list. Title, writer and length fill in by themselves.">
+      <button type="submit" class="primary">Add</button>
+    </form>
+    <input id="libSearch" placeholder="Find…" class="find" title="Filter the list">
+    <button type="button" id="lineupBtn" data-cmd="smart" title="Line-up assistant: arranges the songs still to play, keeping writers fair (you 40%, others 20%), tempo and energy flowing. One click, and Undo puts it back.">✨ Line-up</button>
+    <button type="button" id="lineupUndo" class="hidden" title="Put the list back the way it was">Undo</button>
+    <button type="button" id="libImportBtn" title="Bring in a list from your Rundown page, a spreadsheet or text">Import</button>
+    <button type="button" id="libRecheck" title="Check every ⚠ song again (after a writer switched on Allow embedding)">↻ Re-check ⚠</button>
+    <button type="button" id="libProbeAll" class="hidden">lengths</button>
   </div>
 
-  <!-- LIBRARY -->
-  <div class="tab-body hidden" data-body="library">
-    <form id="libForm" class="lib-form" autocomplete="off">
-      <input id="libUrl" placeholder="YouTube link (watch, youtu.be, shorts…)" required title="Paste the song's YouTube link">
-      <button type="button" id="libFetch" title="Fills in the title and creator, reads the song length and checks it will play in the mixer">Fetch info</button>
-      <input id="libTitle" placeholder="Title">
-      <select id="libCreator" title="Link this song to one of your creators (used for fair rotation and credits)"><option value="">— Creator —</option></select>
-      <input id="libArtist" placeholder="Artist name (if not a listed creator)">
-      <input id="libLicense" placeholder="Permission (e.g. Full permission — creator)">
-      <input id="libDate" type="date" title="Date approved">
-      <input id="libBpm" type="number" min="40" max="220" step="0.1" placeholder="BPM" title="Tempo. Leave empty and use TAP on a deck instead.">
-      <select id="libEnergy" title="Energy 1 (chill) to 5 (peak). Smart Next uses this to build a smooth flow.">
-        <option value="">Energy</option><option value="1">1 · chill</option><option value="2">2 · easy</option>
-        <option value="3">3 · groove</option><option value="4">4 · lift</option><option value="5">5 · peak</option>
-      </select>
-      <input id="libTags" placeholder="Tags (intro, chill, outro…)">
-      <input id="libNotes" placeholder="Notes / credit text">
-      <span id="libInfo" class="dim"></span>
-      <button type="submit" id="libSave" class="primary">Add to approved library</button>
-      <button type="button" id="libCancel" class="hidden">Cancel edit</button>
-    </form>
-    <div class="bar-row">
-      <input id="libSearch" placeholder="Search title, creator, tag, permission…" class="grow">
-      <button type="button" id="libImportBtn" class="primary" title="Bring in your existing music list: paste it, or pick a CSV / text file exported from your Rundown console or a spreadsheet">📥 Import list</button>
-      <button type="button" id="libRecheck" title="Check every ⚠ song again, for example after a writer switched &quot;Allow embedding&quot; on, and clear the mark on the ones that now play">↻ Re-check ⚠ songs</button>
-      <button type="button" id="libProbeAll" title="Look up any missing song lengths">Fill missing lengths</button>
-    </div>
-    <table class="lib-table">
-      <thead><tr><th></th><th>Track</th><th>Length</th><th>BPM</th><th>Energy</th><th>Permission</th><th>Plays</th><th></th></tr></thead>
-      <tbody id="libBody"></tbody>
-    </table>
-  </div>
-
-  <!-- CREATORS -->
-  <div class="tab-body hidden" data-body="creators">
-    <form id="crForm" class="cr-form" autocomplete="off">
-      <input id="crName" placeholder="Creator name" required>
-      <input id="crChannel" placeholder="YouTube channel link, @handle or channel ID (UC…)" title="Used to watch for new uploads. You can find the channel ID in YouTube: channel → About → Share channel → Copy channel ID.">
-      <label class="cr-img" title="Creator picture for the viewer badge. Filled in from their YouTube channel automatically; click to upload your own instead."><img id="crImgPrev" alt=""><span>Image</span><input id="crImg" type="file" accept="image/png,image/jpeg,image/webp"></label>
-      <input id="crColor" type="color" value="#a78bfa" title="Creator color shown on decks, queue and stats">
-      <label class="cr-share" title="Airtime share. Give your own songs more: e.g. you 40, each other writer 20. Smart DJ plays whoever is furthest below their share.">Share <input id="crShare" type="number" min="1" max="100" value="25"> %</label>
-      <button type="submit" id="crSave" class="primary">Add creator</button>
-      <button type="button" id="crCancel" class="hidden">Cancel edit</button>
+  <div id="inboxBand" class="inbox-band hidden">
+    <div class="ib-head"><b>New from your writers</b> <span id="inboxCount" class="count">0</span> <span class="dim">— your OK puts them at the bottom of the list</span>
       <span class="spacer"></span>
-      <button type="button" id="crCheck" title="Look for new uploads from every creator now">🔔 Check for new songs</button>
-    </form>
-    <div id="crStatus" class="dim cr-status"></div>
-    <div id="crCards" class="cr-cards"></div>
-    <div class="bar-row inbox-head">
-      <span class="sec">NEW UPLOADS WAITING FOR APPROVAL</span><span id="inboxCount" class="count">0</span>
-      <span class="spacer"></span>
-      <button type="button" id="inboxApproveAll" title="Approve every waiting upload into the library">Approve all</button>
-      <button type="button" id="inboxIgnoreAll" class="danger" title="Dismiss every waiting upload (they won't come back)">Ignore all</button>
+      <button type="button" id="inboxApproveAll" title="Add every waiting song to the list">Add all</button>
+      <button type="button" id="inboxIgnoreAll" class="danger" title="Dismiss every waiting song">Ignore all</button>
     </div>
     <ul id="inboxList" class="list inbox"></ul>
   </div>
 
-  <!-- PLAYLISTS -->
-  <div class="tab-body hidden" data-body="playlists">
-    <div class="bar-row"><span class="dim">Save the queue as a playlist from the Queue tab. Load replaces the queue, Append adds to the end.</span></div>
-    <ul id="plList" class="list"></ul>
+  <ol id="queueList" class="thelist"></ol>
+  <div id="listEmpty" class="list-empty hidden">Your list is empty. Paste or drag a YouTube link above, approve new songs from your writers, or use <b>Import</b>.</div>
+</section>
+
+<section class="browser">
+  <nav class="tabs">
+    <button type="button" data-tab="creators" class="active" title="You, Lance, Lise and Rhonda: channels, pictures, airtime shares">Writers <span id="crTabCount" class="count hot hidden">0</span></button>
+    <button type="button" data-tab="history" title="What played, and credits for your YouTube description">Log &amp; credits</button>
+    <button type="button" data-tab="settings" title="Settings, backup, Stream Deck">Settings</button>
+  </nav>
+
+  <div class="tab-body" data-body="creators">
+    <form id="crForm" class="cr-form" autocomplete="off">
+      <input id="crName" placeholder="Writer name" required>
+      <input id="crChannel" placeholder="YouTube channel link, @handle or channel ID (UC…)" title="Used to watch for new uploads. You can find the channel ID in YouTube: channel → About → Share channel → Copy channel ID.">
+      <label class="cr-img" title="Creator picture for the viewer badge. Filled in from their YouTube channel automatically; click to upload your own instead."><img id="crImgPrev" alt=""><span>Image</span><input id="crImg" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <input id="crColor" type="color" value="#a78bfa" title="Creator color shown on decks, queue and stats">
+      <label class="cr-share" title="Airtime share. Give your own songs more: e.g. you 40, each other writer 20. Smart DJ plays whoever is furthest below their share.">Share <input id="crShare" type="number" min="1" max="100" value="25"> %</label>
+      <button type="submit" id="crSave" class="primary">Add writer</button>
+      <button type="button" id="crCancel" class="hidden">Cancel edit</button>
+      <span class="spacer"></span>
+      <button type="button" id="crCheck" title="Look for new songs from every writer now">🔔 Check for new songs</button>
+    </form>
+    <div id="crStatus" class="dim cr-status"></div>
+    <div id="crCards" class="cr-cards"></div>
   </div>
 
   <!-- HISTORY -->
@@ -240,11 +171,11 @@
         <label>Warn when a song has less than <input type="number" id="warnSec" min="5" max="120" value="30"> s left</label>
         <label>Dead-air alarm
           <select id="deadAirMode">
-            <option value="autodj">On Air + Auto DJ on</option>
+            <option value="autodj">On Air + Assist or Auto</option>
             <option value="always">Any time On Air</option>
             <option value="off">Off</option>
           </select></label>
-        <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play tracks in the library)</label>
+        <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play songs from your list)</label>
         <label class="check" title="ON (recommended): music and video play in a separate Viewer tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Viewer tab</b> (share that tab in StreamYard)</label>
       </div>
       <div class="card">
@@ -292,7 +223,7 @@
   <div class="modal-box imp-box">
     <h2>Import your music list</h2>
     <p class="dim">Paste the list from your Rundown console (or any document or spreadsheet), or choose a file: your saved <b>Rundown Console.html</b>, or a .csv / .txt / .json export.
-      Every YouTube link is found automatically. Nothing is added until you press <b>Add</b>.</p>
+      Every YouTube link is found automatically. Nothing is added until you press <b>Add</b>. Songs join the bottom of your list, in order.</p>
     <textarea id="impText" rows="7" placeholder="Paste here. For example:&#10;My Song Title - Ivan  https://youtu.be/abc123defgh&#10;Another Song | Writer 2 | https://www.youtube.com/watch?v=xyz987uvwab"></textarea>
     <div class="bar-row">
       <label class="file-btn">Choose file…<input type="file" id="impFile" accept=".html,.htm,.csv,.txt,.tsv,.json,text/html,text/csv,text/plain,application/json"></label>
@@ -302,10 +233,7 @@
     <div id="impPreview" class="hidden">
       <div class="bar-row">
         <label>Set creator for all checked: <select id="impAllCreator"><option value="">—</option></select></label>
-        <span class="spacer"></span>
-        <label class="check"><input type="checkbox" id="impQueue"> Add to the queue in this order</label>
-        <label class="check"><input type="checkbox" id="impPl" checked> Save as playlist</label>
-        <input id="impPlName" value="Rundown import">
+
       </div>
       <div class="imp-list"><table class="lib-table"><thead><tr><th><input type="checkbox" id="impAll" checked title="Select all"></th><th></th><th>Title</th><th>Creator</th><th>Link</th></tr></thead><tbody id="impBody"></tbody></table></div>
     </div>
@@ -313,81 +241,109 @@
   </div>
 </div>
 
+<div id="songEdit" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-box edit-box">
+    <h2>Song details</h2>
+    <form id="libForm" class="lib-form" autocomplete="off">
+      <input id="libUrl" placeholder="YouTube link (watch, youtu.be, shorts…)" required title="Paste the song's YouTube link">
+      <button type="button" id="libFetch" title="Fills in the title and creator, reads the song length and checks it will play in the mixer">Fetch info</button>
+      <input id="libTitle" placeholder="Title">
+      <select id="libCreator" title="Link this song to one of your creators (used for fair rotation and credits)"><option value="">— Creator —</option></select>
+      <input id="libArtist" placeholder="Artist name (if not a listed creator)">
+      <input id="libLicense" placeholder="Permission (e.g. Full permission — creator)">
+      <input id="libDate" type="date" title="Date approved">
+      <input id="libBpm" type="number" min="40" max="220" step="0.1" placeholder="BPM" title="Tempo. Leave empty and use TAP on a deck instead.">
+      <select id="libEnergy" title="Energy 1 (chill) to 5 (peak). Smart Next uses this to build a smooth flow.">
+        <option value="">Energy</option><option value="1">1 · chill</option><option value="2">2 · easy</option>
+        <option value="3">3 · groove</option><option value="4">4 · lift</option><option value="5">5 · peak</option>
+      </select>
+      <input id="libTags" placeholder="Tags (intro, chill, outro…)">
+      <input id="libNotes" placeholder="Notes / credit text">
+      <span id="libInfo" class="dim"></span>
+      <button type="submit" id="libSave" class="primary">Add to the list</button>
+      <button type="button" id="libCancel" class="hidden">Cancel edit</button>
+    </form>
+    <div class="modal-btns"><button type="button" id="songEditClose">Close</button></div>
+  </div>
+</div>
+
 <div id="help" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal-box help-box">
-    <h2>Quick start</h2>
+    <h2>Easy start</h2>
     <ol>
-      <li><b>Creators tab:</b> add your creators and their YouTube channels. New uploads show up automatically — one click approves them.</li>
-      <li><b>Library:</b> paste any approved link and press <i>Fetch info</i>. On a deck, press <b>TAP</b> to the beat and <b>GRID</b> on a downbeat once per song — it's saved forever.</li>
-      <li><b>Queue:</b> drag songs in, or use <b>Smart Next</b>. You always have the final say: songs marked <b>SMART</b> were picked for you — press <b>⇄</b> to swap one, ✕ to remove it, or drag your own song in front. <b>Not now</b> hides a suggestion for this show; 🤖 in the library stops a song ever being auto-picked.</li>
-      <li>Go live in StreamYard, press <b>ON AIR</b>, then <b>AUTO DJ</b> — or mix by hand with <b>MIX ⇄</b> and the crossfader.</li>
-      <li>POWER ON opens a second tab, the <b>Viewer tab</b>. Click it once. In StreamYard, share <b>that</b> tab with <i>Also share tab audio</i> ticked. Viewers see the full YouTube video with the creator&#39;s picture, name and song title. Your mixer stays in its own tab.</li>
-      <li>Talking? Hit <b>TALK</b> (T) or turn on voice auto-duck.</li>
+      <li><b>Writers</b> (bottom): paste the YouTube channel link for you, Lance, Lise and Rhonda. Their new songs appear above the list — one click adds them.</li>
+      <li><b>The list</b> is all the music, in play order. Paste or drag a YouTube link to add one. Drag rows to reorder. <b>✨ Line-up</b> arranges it for you (Undo puts it back).</li>
+      <li>Pick who drives: <b>Manual</b> (you DJ), <b>Assist</b> (lines up the next song and mixes it in if you don't), or <b>Auto</b> (runs the show). Click <b>Manual</b> any time to take over.</li>
+      <li>The <b>Viewer tab</b> opens by itself: click it once, then share <b>that tab</b> in StreamYard with <i>Also share tab audio</i>.</li>
+      <li>Talking? <b>🎙 Talk</b> dips the music.</li>
     </ol>
-    <p class="dim">Hover over anything for help. Keys and Stream Deck URLs are in Settings.</p>
+    <p class="dim">Hover over anything for help. Keys and Stream Deck buttons are in Settings.</p>
     <div class="modal-btns"><button type="button" id="helpClose" class="primary">Got it</button></div>
   </div>
 </div>
 
 <template id="deckTpl">
   <section class="deck">
-    <div class="deck-head">
+    <div class="dk-top">
       <span class="deck-letter" data-r="letter"></span>
-      <div class="platter" data-r="platter" title="Spins while the deck plays"><img data-r="thumb" alt=""><span></span></div>
-      <div class="deck-title"><div class="t-title" data-r="title"></div><div class="t-artist" data-r="artist"></div></div>
-      <span class="deck-state" data-r="state">EMPTY</span>
+      <div class="screen dk-art" data-r="screen"><div class="player-host"><div data-r="player"></div></div></div>
+      <div class="deck-title">
+        <div class="t-title" data-r="title"></div>
+        <div class="t-artist" data-r="artist"></div>
+        <div class="dk-meta">
+          <span class="deck-state" data-r="state">EMPTY</span>
+          <span class="beat-lights" data-r="lights" title="Beat counter (after TAP + GRID)"><i></i><i></i><i></i><i></i></span>
+          <span class="bpm" data-r="bpm" title="Tempo">— BPM</span>
+          <span class="barpos" data-r="barpos"></span>
+        </div>
+      </div>
+      <div class="dk-time" title="Time to the end of the song (or its MIX-OUT mark). Yellow 30 s, red 10 s.">
+        <b data-r="remain">-0:00</b>
+        <small><span data-r="elapsed">0:00</span> / <span data-r="length">0:00</span></small>
+      </div>
     </div>
-    <div class="screen" data-r="screen"><div class="player-host"><div data-r="player"></div></div></div>
-    <div class="times">
-      <div class="time-box" title="Time played so far"><label>ELAPSED</label><span data-r="elapsed">0:00</span></div>
-      <div class="time-box big" title="Time until the song ends (or reaches its MIX-OUT mark). Yellow = 30 s, red = 10 s."><label>TIME TO END</label><span data-r="remain">-0:00</span></div>
-      <div class="time-box" title="Song length"><label>LENGTH</label><span data-r="length">0:00</span></div>
-    </div>
-    <div class="beatbar">
-      <div class="beat-lights" data-r="lights" title="Beat counter: lights follow the beat once tempo and downbeat are set"><i></i><i></i><i></i><i></i></div>
-      <span class="bpm" data-r="bpm" title="Tempo in beats per minute">— BPM</span>
-      <span class="barpos" data-r="barpos"></span>
-      <button type="button" data-a="tap" data-r="tapBtn" title="TAP along to the beat (4+ taps) to set the tempo. Saved with the song.">TAP</button>
-      <button type="button" data-a="grid" title="GRID: press exactly on a downbeat (the '1') to sync the bar counter">GRID</button>
-      <button type="button" data-a="half" title="Halve the tempo">½</button>
-      <button type="button" data-a="dbl" title="Double the tempo">×2</button>
-    </div>
-    <div class="progress" data-r="progress" title="Click to jump to that point">
+    <div class="progress" data-r="progress" title="Click to jump">
       <div class="bar" data-r="bar"></div>
       <div class="markers" data-r="markers"></div>
       <div class="playhead" data-r="playhead"></div>
     </div>
     <div class="mixout" data-r="mixout"></div>
-    <div class="transport">
-      <button type="button" class="btn cue" data-a="cue" title="CUE (club style): when paused it sets the cue point; when playing it jumps back to the cue and pauses">CUE</button>
+    <div class="dk-ctrl">
       <button type="button" class="btn play" data-a="play" data-r="playBtn" title="Play / pause">▶</button>
-      <button type="button" data-a="restart" title="Back to the song's start point">⏮</button>
-      <button type="button" data-a="back" title="Back 10 seconds">−10s</button>
-      <button type="button" data-a="fwd" title="Forward 10 seconds">+10s</button>
+      <button type="button" class="btn cue" data-a="cue" title="CUE: paused = set cue point; playing = back to cue and pause">cue</button>
+      <button type="button" data-a="restart" title="Back to the start">⏮</button>
+      <button type="button" data-a="back" title="Back 10 s">−10</button>
+      <button type="button" data-a="fwd" title="Forward 10 s">+10</button>
+      <button type="button" data-a="next" title="Load the next song from the list onto this deck">next ⤵</button>
+      <span class="spacer"></span>
+      <button type="button" data-a="tap" data-r="tapBtn" title="TAP 4+ times to the beat to set the tempo (saved)">tap</button>
+      <button type="button" data-a="grid" title="GRID: press exactly on a '1' to sync the bar counter">grid</button>
+      <button type="button" data-a="more" class="more-btn" title="Hot cues, loops, trim">⋯</button>
     </div>
-    <div class="pads">
-      <div class="pad-group"><span>HOT CUES</span>
-        <button type="button" data-hc="0" title="Hot cue 1: click to set, click again to jump. Right-click clears.">1</button>
-        <button type="button" data-hc="1" title="Hot cue 2: click to set, click again to jump. Right-click clears.">2</button>
-        <button type="button" data-hc="2" title="Hot cue 3: click to set, click again to jump. Right-click clears.">3</button>
-        <button type="button" data-hc="3" title="Hot cue 4: click to set, click again to jump. Right-click clears.">4</button>
+    <div class="dk-more hidden" data-r="more">
+      <div class="pad-group"><span>cues</span>
+        <button type="button" data-hc="0" title="Hot cue 1: click to set, click again to jump, right-click clears">1</button>
+        <button type="button" data-hc="1" title="Hot cue 2">2</button>
+        <button type="button" data-hc="2" title="Hot cue 3">3</button>
+        <button type="button" data-hc="3" title="Hot cue 4">4</button>
       </div>
-      <div class="pad-group"><span>LOOP</span>
-        <button type="button" data-a="loopIn" title="Loop start">IN</button>
-        <button type="button" data-a="loopOut" title="Loop end — starts looping">OUT</button>
-        <button type="button" data-a="loopBars" data-r="loopBtn" title="Instant loop: 4 bars if the tempo is known, otherwise 8 seconds. Click again to exit.">4 BAR</button>
-        <button type="button" data-a="loopExit" title="Leave the loop and play on">EXIT</button>
+      <div class="pad-group"><span>loop</span>
+        <button type="button" data-a="loopIn" title="Loop start">in</button>
+        <button type="button" data-a="loopOut" title="Loop end — starts looping">out</button>
+        <button type="button" data-a="loopBars" data-r="loopBtn" title="Instant 4-bar loop (8 s without tempo). Click again to exit.">4 bar</button>
+        <button type="button" data-a="loopExit" title="Leave the loop">exit</button>
       </div>
-      <div class="pad-group"><span>TRIM</span>
-        <button type="button" data-a="setIn" title="START: the song begins here next time (skip long intros or silence)">START</button>
-        <button type="button" data-a="setOut" title="MIX-OUT: Auto DJ leaves the song here (skip long outros)">MIX-OUT</button>
-        <button type="button" data-a="clearTrim" title="Clear the START and MIX-OUT marks">CLR</button>
+      <div class="pad-group"><span>trim</span>
+        <button type="button" data-a="setIn" title="START: the song begins here next time">start</button>
+        <button type="button" data-a="setOut" title="MIX-OUT: mixes leave the song here">mix-out</button>
+        <button type="button" data-a="clearTrim" title="Clear start / mix-out">clear</button>
+        <button type="button" data-a="half" title="Halve tempo">½</button>
+        <button type="button" data-a="dbl" title="Double tempo">×2</button>
       </div>
-    </div>
-    <div class="load-row">
-      <input data-r="url" placeholder="Paste approved YouTube link…" title="Paste an approved YouTube link and press Enter">
-      <button type="button" data-a="load" title="Load the pasted link onto this deck">LOAD</button>
-      <button type="button" data-a="next" title="Load the next song from the queue onto this deck">NEXT ⤵</button>
+      <div class="load-row">
+        <input data-r="url" placeholder="Paste a link to load straight onto this deck…">
+        <button type="button" data-a="load">load</button>
+      </div>
     </div>
   </section>
 </template>
@@ -396,14 +352,14 @@
 <!-- Appears while a YouTube link is dragged over the mixer: drop it on a box. -->
 <div id="dropZone" class="dropzone hidden" aria-hidden="true">
   <div class="dz dz-a" data-dz="A"><span>⬇</span>Load on<b>DECK A</b></div>
-  <div class="dz dz-q" data-dz="Q"><span>⬇</span>Add to the<b>QUEUE</b></div>
+  <div class="dz dz-q" data-dz="Q"><span>⬇</span>Add to<b>THE LIST</b></div>
   <div class="dz dz-b" data-dz="B"><span>⬇</span>Load on<b>DECK B</b></div>
   <div class="dz-hint">Drop the YouTube link on a box</div>
 </div>
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=3.0.0"></script>
+<script src="app.js?v=3.1.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
