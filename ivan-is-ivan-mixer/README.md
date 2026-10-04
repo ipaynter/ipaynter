@@ -29,9 +29,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Adding music: just drag or paste the link
 
-- **Drag** a YouTube link from YouTube, your Rundown page or anywhere else:
-  - onto **Deck A or B** to load it there, or
-  - onto the **Queue** to line it up (drop it between songs to place it).
+- **Drag** a YouTube link (from the address bar, a YouTube page, your Rundown page…) over the mixer. A drop screen appears with three boxes: **DECK A · QUEUE · DECK B**. Let go on the one you want.
 - **Ctrl+V** anywhere in the mixer adds a copied YouTube link to the queue.
 - **Paste** into a deck's link box and press LOAD. It asks once, then adds and loads it.
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=2.5.0">
+<link rel="stylesheet" href="styles.css?v=2.5.1">
 </head>
 <body>
 
@@ -390,10 +390,17 @@
 </template>
 
 <div id="tip" class="tip hidden"></div>
+<!-- Appears while a YouTube link is dragged over the mixer: drop it on a box. -->
+<div id="dropZone" class="dropzone hidden" aria-hidden="true">
+  <div class="dz dz-a" data-dz="A"><span>⬇</span>Load on<b>DECK A</b></div>
+  <div class="dz dz-q" data-dz="Q"><span>⬇</span>Add to the<b>QUEUE</b></div>
+  <div class="dz dz-b" data-dz="B"><span>⬇</span>Load on<b>DECK B</b></div>
+  <div class="dz-hint">Drop the YouTube link on a box</div>
+</div>
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=2.5.0"></script>
+<script src="app.js?v=2.5.1"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

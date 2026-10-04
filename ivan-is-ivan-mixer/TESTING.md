@@ -43,8 +43,8 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 ## 3a. Drag and paste links
 
-- [ ] 3a.1 In another Chrome tab, open a writer's song on YouTube. Drag the link from the address bar onto **Deck A**. It loads, and the title and writer fill in.
-- [ ] 3a.2 Drag a song link onto the **Queue**. It joins the queue with its picture.
+- [ ] 3a.1 Put the mixer and a YouTube window side by side. Drag the song's link from YouTube's address bar over the mixer. A drop screen with **DECK A · QUEUE · DECK B** appears.
+- [ ] 3a.2 Let go on **DECK A**. It loads, and the title and writer fill in. Drag another and let go on **QUEUE**. It joins the queue with its picture.
 - [ ] 3a.3 Copy a YouTube link (Ctrl+C), click an empty spot in the mixer, then press **Ctrl+V**. It's queued.
 - [ ] 3a.4 Drop the same link again. The library count doesn't go up.
 

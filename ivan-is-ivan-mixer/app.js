@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -1822,6 +1822,35 @@ async function fillDetails(t) {
   } catch { /* the player look-up below still fills it in */ }
   probeLength(t);
 }
+
+// Dragging a link in from another tab or window: show the drop screen above everything
+// (the YouTube videos are separate pages and would otherwise swallow the drop).
+let dzTimer = null;
+function showDropZone(on) {
+  $('#dropZone').classList.toggle('hidden', !on);
+  if (!on) $$('.dz').forEach(z => z.classList.remove('over'));
+}
+document.addEventListener('dragenter', e => { if (linkDrag(e)) { e.preventDefault(); showDropZone(true); } });
+document.addEventListener('dragover', e => {
+  if (!linkDrag(e)) return;
+  e.preventDefault();                      // never let Chrome open the link instead of the mixer
+  e.dataTransfer.dropEffect = 'copy';
+  showDropZone(true);
+  const z = e.target.closest?.('.dz');
+  $$('.dz').forEach(x => x.classList.toggle('over', x === z));
+  clearTimeout(dzTimer);
+  dzTimer = setTimeout(() => showDropZone(false), 500); // hides once the drag leaves the window
+});
+document.addEventListener('drop', e => {
+  if (!linkDrag(e)) return;
+  e.preventDefault();
+  clearTimeout(dzTimer); showDropZone(false);
+  const where = e.target.closest?.('.dz')?.dataset.dz || 'Q';
+  const tracks = ingestLinks(droppedText(e));
+  if (!tracks.length) return;
+  if (where === 'Q') { tracks.forEach(t => addToQueue(t.id)); toast(`Queued ${tracks.length} song${tracks.length === 1 ? '' : 's'}`, 'good'); }
+  else { decks[where].userLoad(tracks[0]); tracks.slice(1).forEach(t => addToQueue(t.id)); }
+});
 
 document.addEventListener('paste', e => {
   if (e.target.closest('input, textarea, select') || !$('#imp').classList.contains('hidden')) return;

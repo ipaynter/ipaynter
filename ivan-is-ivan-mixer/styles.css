@@ -543,3 +543,19 @@ body.staged .stage-ctrl { display: flex; }
 /* version label */
 .ver { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--dim); border: 1px solid var(--line); border-radius: 9px; padding: 1px 6px; margin-left: 4px; font-weight: 400; }
 .ver-splash { font-family: var(--mono); color: var(--dim); margin: -18px 0 22px; letter-spacing: 2px; }
+
+/* players never catch the mouse: the mixer controls them, and drops reach the mixer */
+.player-host iframe { pointer-events: none; }
+
+/* drop screen shown while a YouTube link is dragged over the mixer */
+.dropzone { position: fixed; inset: 0; z-index: 500; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; padding: 70px 24px 24px; background: rgba(4, 6, 10, .82); backdrop-filter: blur(4px); }
+.dz { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 3px dashed var(--line); border-radius: 22px; color: var(--dim); font-size: 18px; transition: all .12s; }
+.dz b { font-size: clamp(22px, 3vw, 44px); letter-spacing: 3px; color: var(--text); }
+.dz span { font-size: 40px; }
+.dz-a { border-color: rgba(34, 211, 238, .5); } .dz-b { border-color: rgba(255, 122, 61, .5); } .dz-q { border-color: rgba(46, 229, 157, .5); }
+.dz.over { transform: scale(1.03); color: var(--text); }
+.dz-a.over { background: rgba(34, 211, 238, .18); border-color: var(--a); box-shadow: 0 0 40px var(--a-glow); }
+.dz-b.over { background: rgba(255, 122, 61, .18); border-color: var(--b); box-shadow: 0 0 40px var(--b-glow); }
+.dz-q.over { background: rgba(46, 229, 157, .16); border-color: var(--green); box-shadow: 0 0 40px rgba(46, 229, 157, .5); }
+.dz-hint { position: fixed; top: 20px; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: 3px; color: var(--text); pointer-events: none; }
+@media (max-width: 760px) { .dropzone { grid-template-columns: 1fr; } }
