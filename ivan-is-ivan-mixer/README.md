@@ -5,6 +5,14 @@ Runs on your own computer in Google Chrome. You don't need an account, you don't
 
 **Version:** see the `VERSION` file, the top bar of the mixer, and `CHANGELOG.md` for what changed in each release.
 
+## Easiest: the desktop button
+
+1. Put `Ivan Mixer.bat` and the mixer zip in your **Downloads** folder.
+2. Double-click `Ivan Mixer.bat`. It installs the mixer into `C:\Users\<you>\IvanIsIvanMixer`, makes an **"Ivan is Ivan Mixer"** desktop button, and starts it.
+3. After that, just click the desktop button.
+
+**To update:** download the new zip into Downloads and click the button. Your songs and Stream Deck key are kept.
+
 ## Start it
 
 | Computer | What to do |

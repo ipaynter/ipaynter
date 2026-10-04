@@ -18,6 +18,12 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v2.6.0 — 2026-10-04 — Desktop button
+Commit: see the commit titled *“v2.6.0: desktop button”*
+- New `Ivan Mixer.bat`. Each click installs the newest `ivan-is-ivan-mixer*.zip` from Downloads (only when it's new) into `%USERPROFILE%\IvanIsIvanMixer`, keeping your library and Stream Deck key. It then starts the mixer.
+- The first click puts an **"Ivan is Ivan Mixer"** button on the desktop.
+- No checksum step needed. Uses Windows' built-in unzip, with a PowerShell fallback.
+
 ## v2.5.2 — 2026-10-04 — Fix: reliable start on Windows
 Commit: `b473953`
 - `start-windows.bat` clears Windows' "downloaded from the internet" mark from the app files itself, so they're allowed to run.
