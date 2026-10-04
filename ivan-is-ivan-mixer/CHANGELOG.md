@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.1.0 — 2026-10-04 — Easy like Sunday morning
-Commit: see the commit titled *“v3.1.0: one list, three modes, new look”*
+Commit: `1a10bab`
 - **New look:** calm, flat and compact. Small decks, an inline crossover mixer, and slim faders.
 - **One list for all the music**, in play order and always on screen. It replaces the separate queue, library and playlists. Each row shows the song's picture, writer, status (playing, on a deck, NEXT, ✓ played, ⚠ blocked), start time and length. Drag to reorder, ↑ plays a song next, and ✎ opens its details.
 - **Manual · Assist · Auto:**
