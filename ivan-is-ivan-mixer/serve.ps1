@@ -19,6 +19,32 @@ $dataFile = Join-Path $dataDir 'mixer-data.json'
 $maxBody = 20MB
 $keepDaily = 30
 
+$url = "http://localhost:$port/"
+$logFile = Join-Path $root 'start-log.txt'
+function Write-Log([string]$msg) {
+    try { Add-Content -LiteralPath $logFile -Value ((Get-Date -Format 'HH:mm:ss') + '  ' + $msg) } catch {}
+}
+# Any unexpected start-up error: show it in plain words and record it for troubleshooting.
+trap {
+    Write-Host ''
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Log "ERROR: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)"
+    exit 2
+}
+
+# Open the mixer in Google Chrome specifically (the default browser may be Edge or Firefox).
+function Open-Mixer {
+    $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+                "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+                "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe") |
+        Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    try {
+        if ($chrome) { Start-Process -FilePath $chrome -ArgumentList '--new-window', $url; Write-Log "Opened Chrome: $chrome" }
+        else { Start-Process $url; Write-Log 'Chrome not found in the usual places; opened the default browser' }
+    } catch { Write-Log "Could not open a browser: $($_.Exception.Message)" }
+    if (-not $chrome) { Write-Host "Google Chrome was not found. If the mixer opened in another browser, copy $url into Chrome." -ForegroundColor Yellow }
+}
+
 $version = 'unknown'
 $versionFile = Join-Path $root 'VERSION'
 if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
@@ -65,17 +91,32 @@ function Get-YouTube([string]$url) {
     try { return $wc.DownloadString($url) } finally { $wc.Dispose() }
 }
 
+Write-Log "serve.ps1 starting: mixer v$version, PowerShell $($PSVersionTable.PSVersion)"
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://localhost:$port/")
+$listener.Prefixes.Add($url)
 try { $listener.Start() } catch {
-    Write-Host "Could not start on port $port. Is the mixer already running in another window?" -ForegroundColor Red
-    Read-Host 'Press Enter to close'
+    $why = $_.Exception.Message
+    Write-Log "Listener could not start: $why"
+    # Already running (e.g. a second double-click)? Then just open it.
+    $running = $null
+    try { $running = Invoke-RestMethod -Uri ($url + 'api/info') -TimeoutSec 3 } catch {}
+    if ($running -and $running.version) {
+        Write-Host "The mixer (v$($running.version)) is already running. Opening it in Chrome." -ForegroundColor Cyan
+        Write-Log 'Already running; opened it'
+        Open-Mixer
+        Start-Sleep -Seconds 3
+        exit 0
+    }
+    Write-Host "Could not start the mixer on port $port." -ForegroundColor Red
+    Write-Host "Reason: $why" -ForegroundColor Red
+    Write-Host 'If another program uses port 8765, close it, or restart the computer and try again.'
     exit 1
 }
 
-Write-Host "Ivan is Ivan - Live Mixer v$version running at http://localhost:$port/" -ForegroundColor Cyan
+Write-Host "Ivan is Ivan - Live Mixer v$version running at $url" -ForegroundColor Cyan
 Write-Host 'Keep this window open during the show. Close it to stop the mixer.'
-try { Start-Process "http://localhost:$port/" } catch { Write-Host "Open http://localhost:$port/ in Chrome." }
+Write-Log "Running at $url"
+Open-Mixer
 
 try {
     while ($listener.IsListening) {

@@ -17,6 +17,16 @@ Then click **POWER ON**. Press **?** (top right) at any time for the quick-start
 Use the start script every time. If you double-click `index.html` directly, YouTube won't play and nothing is saved to disk.
 The mixer is at `http://localhost:8765`. It only answers this computer, not your network.
 
+## If it won't start
+
+1. Double-click `start-windows.bat` again and **read the black window**. It always says what happened and stays open.
+2. The folder now has **`start-log.txt`**. Send that file, plus a photo of the black window, and the problem can be pinned down exactly.
+3. Common causes:
+   - **Windows SmartScreen** shows "Windows protected your PC". Click **More info → Run anyway**.
+   - **Antivirus** blocked the start script. Allow `start-windows.bat` / `serve.ps1` in that folder. The script only serves files to this computer, and it's plain text you can read.
+   - **You ran it from inside the zip.** Extract the zip first (right-click → Extract All), then run it from the extracted folder.
+   - **It opened in the wrong browser.** Copy `http://localhost:8765` into Chrome.
+
 ## Daily flow
 
 1. **Creators tab:** add your four music writers, yourself included (name, YouTube channel, color, **Share %**). Give your own songs a bigger share, e.g. you 40, the others 20 each. New uploads show up on their own. Click **✓ Approve** or **Ignore**.

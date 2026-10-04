@@ -18,6 +18,16 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v2.5.2 — 2026-10-04 — Fix: reliable start on Windows
+Commit: see the commit titled *“v2.5.2: reliable Windows start”*
+- `start-windows.bat` clears Windows' "downloaded from the internet" mark from the app files itself, so they're allowed to run.
+- Opens the mixer in **Google Chrome** specifically. Before, it opened whatever your default browser was, such as Edge or Firefox.
+- Starting it twice no longer fails. It just opens the mixer that's already running.
+- Errors are shown in plain words and the window never closes silently.
+- Every start writes `start-log.txt` (Windows and PowerShell version, policy, what happened) for troubleshooting.
+- If PowerShell can't start it, it tries Python if that's installed.
+- Tested in real Windows command-prompt (cmd) logic, including failure cases.
+
 ## v2.5.1 — 2026-10-04 — Fix: dragging links in
 Commit: `c8e9fdf`
 - **Fixed:** dragging a YouTube link onto the mixer did nothing. The deck videos (embedded YouTube pages) swallowed the drop, and other areas weren't drop targets.
