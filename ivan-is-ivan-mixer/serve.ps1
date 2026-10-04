@@ -5,7 +5,7 @@
 #   /api/info                mixer page reads the control key
 #   /api/save  (POST)        mixer saves its data to data\mixer-data.json (+ daily copy)
 #   /api/load                mixer restores from the disk copy
-#   /api/resolve?h=<handle>  look up a YouTube channel ID from an @handle
+#   /api/channel?h=|c=       a creator's channel ID and profile picture
 #   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
 
 $ErrorActionPreference = 'Stop'
@@ -119,16 +119,22 @@ try {
                 else { Send-Json $res '{}' }
                 continue
             }
-            if ($path -eq '/api/resolve') {
+            if ($path -eq '/api/channel') {
+                # Channel ID + profile picture, from an @handle (h) or a channel ID (c).
                 $handle = "$($req.QueryString['h'])".TrimStart('@')
-                if ($handle -notmatch '^[\w.\-]{3,30}$') { Send-Json $res '{"error":"bad handle"}' 400; continue }
-                try { $page = Get-YouTube "https://www.youtube.com/@$handle" } catch { Send-Json $res '{"error":"Could not reach YouTube"}' 502; continue }
+                $ch = "$($req.QueryString['c'])"
+                if ($ch -match '^UC[\w-]{22}$') { $url = "https://www.youtube.com/channel/$ch" }
+                elseif ($handle -match '^[\w.\-]{3,30}$') { $url = "https://www.youtube.com/@$handle" }
+                else { Send-Json $res '{"error":"bad channel"}' 400; continue }
+                try { $page = Get-YouTube $url } catch { Send-Json $res '{"error":"Could not reach YouTube"}' 502; continue }
                 $m = [regex]::Match($page, '<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{22})"')
                 if (-not $m.Success) { $m = [regex]::Match($page, '"externalId":"(UC[\w-]{22})"') }
                 if (-not $m.Success) { $m = [regex]::Match($page, '"channelId":"(UC[\w-]{22})"') }
-                if ($m.Success) { Send-Json $res ('{"channelId":"' + $m.Groups[1].Value + '"}') }
-                else { Send-Json $res '{"error":"Channel not found"}' }
-                continue
+                if (-not $m.Success) { Send-Json $res '{"error":"Channel not found"}'; continue }
+                $out = @{ channelId = $m.Groups[1].Value }
+                $img = [regex]::Match($page, '<meta property="og:image" content="(https://yt3\.(?:ggpht|googleusercontent)\.com/[^"<>\s]+)"')
+                if ($img.Success) { $out.avatar = $img.Groups[1].Value.Replace('&amp;', '&') }
+                Send-Json $res ($out | ConvertTo-Json -Compress); continue
             }
             if ($path -eq '/api/feed') {
                 $ch = "$($req.QueryString['c'])"

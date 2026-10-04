@@ -7,7 +7,7 @@ Serves the mixer on http://localhost:8765 (this computer only) and:
   /api/info                mixer page reads the control key
   /api/save  (POST)        mixer saves its data to data/mixer-data.json (+ daily copy)
   /api/load                mixer restores from the disk copy
-  /api/resolve?h=<handle>  look up a YouTube channel ID from an @handle
+  /api/channel?h=|c=       a creator's channel ID and profile picture
   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
 """
 import datetime
@@ -139,18 +139,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self.send_json({})
             with open(DATA_FILE, "rb") as f:
                 return self.send_body(f.read(), "application/json")
-        if path == "/api/resolve":
+        if path == "/api/channel":
+            # Channel ID + profile picture, from an @handle (h) or a channel ID (c).
             handle = q.get("h", [""])[0].lstrip("@")
-            if not HANDLE_RE.match(handle):
-                return self.send_json({"error": "bad handle"}, 400)
+            ch = q.get("c", [""])[0]
+            if CHANNEL_RE.match(ch):
+                url = f"https://www.youtube.com/channel/{ch}"
+            elif HANDLE_RE.match(handle):
+                url = f"https://www.youtube.com/@{handle}"
+            else:
+                return self.send_json({"error": "bad channel"}, 400)
             try:
-                page = youtube_get(f"https://www.youtube.com/@{handle}").decode("utf-8", "replace")
+                page = youtube_get(url).decode("utf-8", "replace")
             except Exception:
                 return self.send_json({"error": "Could not reach YouTube"}, 502)
             m = (re.search(r'<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{22})"', page)
                  or re.search(r'"externalId":"(UC[\w-]{22})"', page)
                  or re.search(r'"channelId":"(UC[\w-]{22})"', page))
-            return self.send_json({"channelId": m.group(1)} if m else {"error": "Channel not found"})
+            if not m:
+                return self.send_json({"error": "Channel not found"})
+            out = {"channelId": m.group(1)}
+            img = re.search(r'<meta property="og:image" content="(https://yt3\.(?:ggpht|googleusercontent)\.com/[^"<>\s]+)"', page)
+            if img:
+                out["avatar"] = img.group(1).replace("&amp;", "&")
+            return self.send_json(out)
         if path == "/api/feed":
             ch = q.get("c", [""])[0]
             if not CHANNEL_RE.match(ch):

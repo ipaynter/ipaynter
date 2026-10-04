@@ -16,6 +16,10 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#8a95a8');
 const thumb = vid => `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
 const today = () => new Date().toISOString().slice(0, 10);
+// Only YouTube-hosted pictures or pictures you uploaded (stored inside the app) are ever shown.
+const safeImg = u => (/^https:\/\/(yt3\.ggpht\.com|yt3\.googleusercontent\.com|i\.ytimg\.com)\/[\w\-./=~%?&]+$/.test(u || '') ||
+  /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(u || '')) ? u : '';
+const NO_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><rect width="16" height="9" fill="#1a202a"/><path d="M6.5 2.5v4l3.5-2z" fill="#4a5568"/></svg>');
 
 function fmt(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
@@ -85,7 +89,9 @@ const S = {
   talk: false, voiceTalk: false,
   autoDJ: false, onAir: false, onAirAt: 0, stage: false,
   transitioning: false, mixTarget: null, deadSince: 0, ytReady: false,
-  creditsMode: 'show', smartSeed: 7
+  creditsMode: 'show', smartSeed: 7,
+  skip: new Set(),    // songs you said 'Not now' to this show
+  lastAuto: false     // was the last song taken from the queue a Smart DJ pick?
 };
 
 const KEYS = {
@@ -141,6 +147,7 @@ function creatorOf(t) {
     (t.artist ? S.creators.find(c => c.name.toLowerCase() === String(t.artist).toLowerCase()) : null) || null;
 }
 const artistOf = t => creatorOf(t)?.name || t?.artist || 'Unknown creator';
+const avatarOf = c => safeImg(c?.avatar);
 const trackLen = t => Math.max(0, (t.outAt || t.duration || 0) - (t.inAt || 0));
 
 /* ---------------- toasts, confirm modal, tooltips ---------------- */
@@ -319,9 +326,10 @@ class Deck {
     return true;
   }
 
-  load(track, autoplay = false) {
+  load(track, autoplay = false, auto = false) {
     if (!track) return;
     this.track = track;
+    this.autoPicked = auto;
     this.played = false; this.finished = false; this.errored = false;
     this.loop = null; this.loopIn = null; this.taps = [];
     this.dur = track.duration || 0;
@@ -604,6 +612,7 @@ class Deck {
     if (S.transitioning && playing && o?.isPlaying()) msg = `MIXING INTO DECK ${S.mixTarget}…`;
     else if (playing && S.autoDJ && live && nextReady) msg = `AUTO MIX TO ${o.id} IN ${fmt(Math.max(0, rem - S.cfg.fadeSec))}${S.cfg.snapBars && b ? ' · ON THE BAR' : ''}`;
     else if (playing && S.autoDJ && live) msg = S.queue.length || S.cfg.smartFill ? `AUTO DJ: NEXT SONG LOADING ON DECK ${o.id}` : 'AUTO DJ: QUEUE EMPTY — ADD MUSIC';
+    else if (S.autoDJ && !live && t && !this.played && !this.errored && !playing) msg = `NEXT UP${this.autoPicked ? ' · SMART DJ PICK' : ' · YOUR PICK'} — load or drop a song here to change it`;
     else if (warn) msg = nextReady ? `ENDING — NEXT ON ${o.id}: ${o.track.title || o.track.videoId}` : `ENDING — NOTHING CUED ON DECK ${o.id}`;
     r.mixout.textContent = msg;
 
@@ -719,6 +728,7 @@ function dequeue() {
   while (S.queue.length) {
     const q = S.queue.shift();
     const t = byId(q.id);
+    S.lastAuto = !!q.auto;
     if (t) { save.queue(); renderQueue(); return t; }
   }
   save.queue(); renderQueue();
@@ -733,7 +743,7 @@ function onDeckEnded(d) {
     if (!S.queue.length && S.cfg.smartFill) smartFillOne();
     const t = dequeue();
     if (!t) { toast('Auto DJ: queue is empty', 'bad'); return; }
-    n.load(t, true);
+    n.load(t, true, S.lastAuto);
   } else n.play();
   setXf(n.id === 'A' ? 0 : 1);
 }
@@ -744,7 +754,7 @@ function autoTick() {
   // Pre-load the next song onto the idle deck.
   if (!S.transitioning && !next.isPlaying() && (!next.track || next.played || next.errored)) {
     if (!S.queue.length && S.cfg.smartFill) smartFillOne();
-    if (S.queue.length) { const t = dequeue(); if (t) next.load(t, false); }
+    if (S.queue.length) { const t = dequeue(); if (t) next.load(t, false, S.lastAuto); }
   }
   if (S.transitioning) return;
   if (live.isPlaying() && live.dur > 0 && next.ready && next.track && !next.played && !next.errored) {
@@ -771,7 +781,7 @@ function setAutoDJ(on) {
       if (!live.track || live.finished || live.errored) {
         if (!S.queue.length && S.cfg.smartFill) smartFillOne();
         const t = dequeue();
-        if (t) live.load(t, true); else toast('Queue is empty — add approved tracks first', 'bad');
+        if (t) live.load(t, true, S.lastAuto); else toast('Queue is empty — add approved tracks first', 'bad');
       } else live.play();
     }
     toast('Auto DJ ON', 'good');
@@ -799,7 +809,7 @@ function panic() {
 
 function toggleOnAir() {
   S.onAir = !S.onAir;
-  if (S.onAir) S.onAirAt = Date.now();
+  if (S.onAir) { S.onAirAt = Date.now(); S.skip.clear(); }
   $('#onair').classList.toggle('on', S.onAir);
   renderCreators(); renderSmart();
 }
@@ -845,12 +855,20 @@ function suggest(n = 3, { creatorId = null } = {}) {
   const busy = new Set([decks.A?.track?.id, decks.B?.track?.id, ...S.queue.map(q => q.id)]);
   const live = liveDeck();
   const ref = (live?.isPlaying() ? live.track : null) || other(live)?.track || live?.track || null;
-  const lastCreator = S.history[0] ? (creatorOf(byVid(S.history[0].videoId)) || creatorById(S.history[0].creatorId))?.id : null;
+  // Count what has aired AND what is already lined up (decks + queue), so picks keep rotating.
   const st = airStats();
+  const planned = [...[decks.A, decks.B].filter(d => d?.track && !d.played).map(d => d.track), ...S.queue.map(q => byId(q.id)).filter(Boolean)];
+  for (const t of planned) {
+    const c = creatorOf(t); if (!c) continue;
+    const x = st[c.id] || (st[c.id] = { plays: 0, secs: 0, lastAt: 0 });
+    x.secs += trackLen(t) || 180;
+  }
+  const lastT = planned.length ? planned[planned.length - 1] : byVid(S.history[0]?.videoId);
+  const lastCreator = (creatorOf(lastT) || creatorById(S.history[0]?.creatorId))?.id || null;
   const total = Object.values(st).reduce((a, x) => a + x.secs, 0);
   const pct = v => Math.round(v * 100) + '%';
   return S.library
-    .filter(t => !t.flag && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
+    .filter(t => !t.flag && !t.noAuto && !S.skip.has(t.videoId) && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
     .map(t => {
       let score = jitter(t.videoId);
       const why = [];
@@ -889,7 +907,7 @@ function suggest(n = 3, { creatorId = null } = {}) {
 function smartFillOne() {
   const s = suggest(1)[0];
   if (!s || s.score < -50) return false;
-  addToQueue(s.t.id);
+  addToQueue(s.t.id, S.queue.length, true);
   toast(`Smart DJ queued "${s.t.title || s.t.videoId}" — ${s.why[0]}`);
   return true;
 }
@@ -901,7 +919,7 @@ function renderSmart() {
   box.innerHTML = picks.map(({ t, why }) => {
     const c = creatorOf(t);
     return `<div class="sm-card" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" draggable="true">
-      <img src="${thumb(t.videoId)}" alt="" loading="lazy">
+      <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
       <div class="sm-body">
         <div class="ttl">${esc(t.title || t.videoId)}</div>
         <div class="sub"><i class="dot"></i>${esc(artistOf(t))} · ${t.duration ? fmt(trackLen(t)) : '?:??'}${t.bpm ? ' · ' + Math.round(t.bpm) + ' BPM' : ''}</div>
@@ -912,6 +930,7 @@ function renderSmart() {
         <button type="button" data-s="top" title="Play this next (top of the queue)">Next</button>
         <button type="button" data-s="A" class="la" title="Load onto deck A">A</button>
         <button type="button" data-s="B" class="lb" title="Load onto deck B">B</button>
+        <button type="button" data-s="skip" class="skip" title="Not now: never suggest this song again during this show">Not now</button>
       </div>
     </div>`;
   }).join('') || '<div class="dim smart-empty">Add songs to your library to get suggestions.</div>';
@@ -924,6 +943,7 @@ function initSmartUI() {
     const a = b.dataset.s;
     if (a === 'q') addToQueue(t.id);
     else if (a === 'top') addToQueue(t.id, 0);
+    else if (a === 'skip') { S.skip.add(t.videoId); renderSmart(); }
     else decks[a].userLoad(t);
   });
   $('#smart').addEventListener('dragstart', e => {
@@ -937,19 +957,26 @@ function initSmartUI() {
 /* ---------------- creators & new-upload alerts ---------------- */
 
 const Creators = {
+  // Returns { channelId, avatar } from a channel link, @handle or channel ID.
   async resolve(input) {
     input = (input || '').trim();
-    if (!input) return '';
+    if (!input) return { channelId: '', avatar: '' };
     let m = input.match(/(UC[\w-]{22})/);
-    if (m) return m[1];
+    const id = m ? m[1] : null;
     m = input.match(/@([\w.\-]{3,30})/);
-    const handle = m ? m[1] : (/^[\w.\-]{3,30}$/.test(input) ? input : null);
-    if (!handle) throw new Error('Use a channel link, @handle or channel ID (UC…)');
-    if (!Remote.ok) throw new Error('Start the mixer with the start script to look up channels');
-    const r = await fetch('/api/resolve?h=' + encodeURIComponent(handle), { cache: 'no-store' });
+    const handle = id ? null : (m ? m[1] : (/^[\w.\-]{3,30}$/.test(input) ? input : null));
+    if (!id && !handle) throw new Error('Use a channel link, @handle or channel ID (UC…)');
+    if (!Remote.ok) {
+      if (id) return { channelId: id, avatar: '' };
+      throw new Error('Start the mixer with the start script to look up channels');
+    }
+    const r = await fetch('/api/channel?' + (id ? 'c=' + id : 'h=' + encodeURIComponent(handle)), { cache: 'no-store' });
     const j = await r.json().catch(() => ({}));
-    if (!j.channelId) throw new Error(j.error || 'Channel not found — paste the channel ID (UC…) instead');
-    return j.channelId;
+    if (!j.channelId) {
+      if (id) return { channelId: id, avatar: '' }; // YouTube unreachable: keep the ID, picture can come later
+      throw new Error(j.error || 'Channel not found — paste the channel ID (UC…) instead');
+    }
+    return { channelId: j.channelId, avatar: safeImg(j.avatar) };
   },
 
   async check(c) {
@@ -990,7 +1017,25 @@ const Creators = {
   }
 };
 
-let crEditId = null;
+let crEditId = null, crUpload = '';
+
+// Shrink an uploaded picture to a 256px square so it stays small in storage.
+function readAvatar(file) {
+  return new Promise((res, rej) => {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return rej(new Error('Use a PNG, JPG or WebP picture'));
+    const img = new Image();
+    img.onload = () => {
+      const n = 256, cv = document.createElement('canvas');
+      cv.width = cv.height = n;
+      const k = Math.min(img.width, img.height);
+      cv.getContext('2d').drawImage(img, (img.width - k) / 2, (img.height - k) / 2, k, k, 0, 0, n, n);
+      URL.revokeObjectURL(img.src);
+      res(cv.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => rej(new Error('Could not read that picture'));
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 function renderCreators() {
   const st = airStats();
@@ -1008,7 +1053,7 @@ function renderCreators() {
     const status = !s.plays ? 'not aired yet' : Math.abs(gap) <= 5 ? 'on target' : gap < 0 ? `${-gap}% behind` : `${gap}% ahead`;
     const cls = !s.plays || Math.abs(gap) <= 5 ? '' : gap < 0 ? 'behind' : 'ahead';
     return `<div class="cr-card" style="--cc:${safeColor(c.color)}" data-id="${c.id}">
-      <div class="cr-top"><span class="cr-dot"></span><b>${esc(c.name)}</b>${waiting ? `<span class="badge">${waiting} new</span>` : ''}</div>
+      <div class="cr-top">${avatarOf(c) ? `<img class="cr-av" src="${esc(avatarOf(c))}" alt="">` : '<span class="cr-dot"></span>'}<b>${esc(c.name)}</b>${waiting ? `<span class="badge">${waiting} new</span>` : ''}</div>
       <div class="cr-meta">${c.channelId ? `<a href="https://www.youtube.com/channel/${esc(c.channelId)}" target="_blank" rel="noopener" title="Open their channel">channel linked ✓</a>` : '<span class="bad">no channel linked</span>'} · ${songs} song${songs === 1 ? '' : 's'}</div>
       <div class="cr-target"><span>Target <b>${tgt}%</b></span><span>Now <b>${share}%</b></span><span class="cr-status ${cls}">${status}</span></div>
       <div class="cr-air" title="Airtime this show: ${share}% (target ${tgt}%). The white line is the target."><i style="width:${share}%"></i><b style="left:${tgt}%"></b></div>
@@ -1068,6 +1113,7 @@ function initCreatorsUI() {
     crEditId = null; $('#crForm').reset();
     $('#crColor').value = DEFAULT_COLORS[S.creators.length % DEFAULT_COLORS.length];
     $('#crShare').value = 25;
+    crUpload = ''; $('#crImgPrev').src = NO_IMG;
     $('#crSave').textContent = 'Add creator'; $('#crCancel').classList.add('hidden');
   };
   resetForm();
@@ -1076,19 +1122,32 @@ function initCreatorsUI() {
     e.preventDefault();
     const name = $('#crName').value.trim();
     if (!name) return;
-    let channelId = '';
-    try { channelId = await Creators.resolve($('#crChannel').value); }
+    let found;
+    try { found = await Creators.resolve($('#crChannel').value); }
     catch (err) { toast(err.message, 'bad'); return; }
+    const channelId = found.channelId;
     const color = safeColor($('#crColor').value);
     const share = clamp(Math.round(+$('#crShare').value || 25), 1, 100);
     let c = crEditId && creatorById(crEditId);
-    if (c) Object.assign(c, { name, channelId, color, share });
-    else { c = { id: uid(), name, channelId, color, share }; S.creators.push(c); }
+    // Your uploaded picture wins; otherwise use the channel's picture.
+    let avatar, uploaded;
+    if (crUpload) { avatar = crUpload; uploaded = true; }
+    else if (c?.avatarUploaded && c.avatar) { avatar = c.avatar; uploaded = true; }
+    else { avatar = found.avatar || c?.avatar || ''; uploaded = false; }
+    if (c) Object.assign(c, { name, channelId, color, share, avatar, avatarUploaded: uploaded });
+    else { c = { id: uid(), name, channelId, color, share, avatar, avatarUploaded: uploaded }; S.creators.push(c); }
+    if (!avatar) toast(`No picture for ${name} yet — click Image to upload one`);
     save.creators(); resetForm(); renderCreators(); renderLibrary(); renderQueue();
     toast(`Creator "${name}" saved`, 'good');
     if (channelId) { try { const n = await Creators.check(c); renderCreators(); renderInbox(); if (n) toast(`${n} upload(s) from ${name} waiting for approval`, 'good'); } catch (err) { toast(err.message, 'bad'); } }
   });
   $('#crCheck').onclick = () => Creators.checkAll(true);
+  $('#crImg').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try { crUpload = await readAvatar(f); $('#crImgPrev').src = crUpload; toast('Picture ready — press Add / Save creator'); }
+    catch (err) { toast(err.message, 'bad'); }
+  };
   $('#crCards').addEventListener('click', async e => {
     const b = e.target.closest('button[data-c]'); if (!b) return;
     const c = creatorById(b.closest('.cr-card').dataset.id); if (!c) return;
@@ -1101,6 +1160,7 @@ function initCreatorsUI() {
       catch (err) { toast(err.message, 'bad'); }
     } else if (a === 'edit') {
       crEditId = c.id; $('#crName').value = c.name; $('#crChannel').value = c.channelId || ''; $('#crColor').value = safeColor(c.color); $('#crShare').value = shareOf(c);
+      crUpload = ''; $('#crImgPrev').src = avatarOf(c) || NO_IMG;
       $('#crSave').textContent = 'Save creator'; $('#crCancel').classList.remove('hidden'); $('#crName').focus();
     } else if (a === 'del' && await ask(`Remove creator "${c.name}"? Their songs stay in the library.`, 'Remove')) {
       S.creators = S.creators.filter(x => x !== c);
@@ -1148,38 +1208,40 @@ function setStage(on) {
     d.r.screen.classList.toggle('staged', on);
     d.r.screen.style.opacity = ''; d.r.screen.style.zIndex = '';
   });
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   stageSig = '';
   renderStage();
+}
+
+function toggleFullscreen() {
+  if (!S.stage) setStage(true);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => toast('Full screen was blocked — click the page, then press F', 'bad'));
 }
 
 function renderStage() {
   if (!S.stage) return;
   const A = decks.A, B = decks.B, pa = A.isPlaying(), pb = B.isPlaying();
-  // Video crossfades along with the audio.
+  // The full video fills the window and crossfades along with the audio.
   let wa = 1 - S.xf;
   if (pa && !pb) wa = 1; else if (!pa && pb) wa = 0; else if (!pa && !pb) wa = liveDeck() === A ? 1 : 0;
   const wb = 1 - wa;
   A.r.screen.style.opacity = wa.toFixed(2); B.r.screen.style.opacity = wb.toFixed(2);
   A.r.screen.style.zIndex = wa >= wb ? 62 : 61; B.r.screen.style.zIndex = wb > wa ? 62 : 61;
 
+  // Badge: creator picture, creator name, song title.
   const main = wa >= wb ? A : B, t = main.track, c = creatorOf(t);
-  const o = other(main);
-  const nxt = (o.track && !o.played && !o.errored) ? o.track : byId(S.queue[0]?.id);
-  const sig = [t?.id, t?.title, c?.id, c?.color, nxt?.id].join('|');
-  if (sig !== stageSig) {
-    stageSig = sig;
-    $('#stage').style.setProperty('--cc', safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')));
-    $('#stTitle').textContent = t ? (t.title || '') : 'The music starts soon';
-    $('#stArtist').textContent = t ? artistOf(t) : 'Ivan is Ivan';
-    $('#stCredit').textContent = t ? `Played with the creator's permission · youtu.be/${t.videoId}` : '';
-    $('#stArt').style.backgroundImage = t ? `url("${thumb(t.videoId)}")` : 'none';
-    $('#stNext').textContent = nxt ? `${nxt.title || nxt.videoId} — ${artistOf(nxt)}` : '—';
-  }
-  $('#stProg').style.width = (main.dur ? clamp(main.time / main.dur * 100, 0, 100) : 0) + '%';
-  const b = main.beat(), playing = main.isPlaying();
-  const lights = $('#stBeat').children;
-  for (let i = 0; i < 4; i++) lights[i].classList.toggle('on', !!(b && playing && b.inBar === i && b.frac < 0.4));
-  $('#stGlow').classList.toggle('pulse', !!(b && playing && b.frac < 0.2));
+  const sig = [t?.id, t?.title, c?.id, c?.name, c?.avatar, c?.color].join('|');
+  if (sig === stageSig) return;
+  stageSig = sig;
+  const badge = $('#stBadge');
+  badge.classList.toggle('hidden', !t);
+  if (!t) return;
+  badge.style.setProperty('--cc', safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')));
+  $('#stAvatar').src = avatarOf(c) || thumb(t.videoId);
+  $('#stName').textContent = artistOf(t);
+  $('#stSong').textContent = t.title || '';
+  badge.classList.remove('enter'); void badge.offsetWidth; badge.classList.add('enter'); // slide in on each new song
 }
 
 /* ---------------- voice auto-duck (reads your mic level only, never records) ---------------- */
@@ -1279,7 +1341,8 @@ const COMMANDS = {
   talkOn: ['Talk-over duck ON', null, () => setTalk(true)],
   talkOff: ['Talk-over duck OFF', null, () => setTalk(false)],
   onair: ['On Air on / off', 'o', toggleOnAir],
-  stage: ['Stage view on / off (share this tab)', 'v', () => setStage(!S.stage)],
+  stage: ['Viewer page on / off (share this tab)', 'v', () => setStage(!S.stage)],
+  full: ['Viewer page full screen on / off', 'f', toggleFullscreen],
   masterUp: ['Master volume +5', 'ArrowUp', () => setMaster(S.cfg.master + 5)],
   masterDown: ['Master volume −5', 'ArrowDown', () => setMaster(S.cfg.master - 5)],
   volADown: ['Deck A volume −5', '[', () => setDeckVol('A', S.cfg.volA - 5)],
@@ -1358,8 +1421,10 @@ document.addEventListener('dragend', () => { drag = null; $$('.drop, .dragover')
 
 /* ---------------- queue ---------------- */
 
-function addToQueue(id, index = S.queue.length) {
-  S.queue.splice(index, 0, { qid: uid(), id });
+function addToQueue(id, index = S.queue.length, auto = false) {
+  const q = { qid: uid(), id };
+  if (auto) q.auto = true;
+  S.queue.splice(index, 0, q);
   save.queue(); renderQueue();
 }
 function removeFromQueue(qid) {
@@ -1376,6 +1441,11 @@ function queueEtas(items) {
   return items.map(t => { const at = eta; eta += Math.max(0, trackLen(t) - S.cfg.fadeSec); return at; });
 }
 
+function creatorChip(t) {
+  const c = creatorOf(t), img = avatarOf(c);
+  return (img ? `<img class="av" src="${esc(img)}" alt="">` : '<i class="dot"></i>') + esc(artistOf(t));
+}
+
 function renderQueue() {
   const items = S.queue.map(q => ({ q, t: byId(q.id) })).filter(x => x.t);
   const etas = queueEtas(items.map(x => x.t));
@@ -1384,13 +1454,15 @@ function renderQueue() {
     const c = creatorOf(t);
     return `<li draggable="true" data-qid="${q.qid}" data-id="${t.id}" style="--cc:${safeColor(c?.color)}" class="cc-row">
       <span class="num">${i + 1}</span>
-      <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
-      <div class="grow"><div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div><div class="sub"><i class="dot"></i>${esc(artistOf(t))} · ${esc(t.license || 'no permission note')}</div></div>
+      <div class="qth"><img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy"><span>${len ? fmt(len) : ''}</span></div>
+      <div class="grow"><div class="ttl">${q.auto ? '<span class="auto-tag" title="Picked by Smart DJ. Swap it (⇄), remove it (✕) or drag your own song in front: you have the final say.">SMART</span> ' : ''}${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div><div class="sub">${creatorChip(t)} · ${esc(t.license || 'no permission note')}</div></div>
       ${t.bpm ? `<span class="len">${Math.round(t.bpm)} BPM</span>` : ''}
       <span class="eta" title="Estimated start time from now">+${fmt(etas[i])}</span>
       <span class="len">${len ? fmt(len) : '?:??'}</span>
       <button type="button" data-q="A" class="la" title="Load onto deck A">A</button><button type="button" data-q="B" class="lb" title="Load onto deck B">B</button>
-      <button type="button" data-q="up" title="Move up">▲</button><button type="button" data-q="del" title="Remove from queue">✕</button>
+      <button type="button" data-q="up" title="Move up">▲</button>
+      <button type="button" data-q="swap" title="Swap for Smart DJ's next-best pick (this one won't be suggested again this show)">⇄</button>
+      <button type="button" data-q="del" title="Remove from queue">✕</button>
     </li>`;
   }).join('');
   $('#queueCount').textContent = items.length;
@@ -1412,6 +1484,15 @@ function initQueueUI() {
     const li = b.closest('li'), qid = li.dataset.qid, id = li.dataset.id;
     const act = b.dataset.q;
     if (act === 'del') removeFromQueue(qid);
+    else if (act === 'swap') {
+      const t = byId(id), q = S.queue.find(x => x.qid === qid);
+      if (t) S.skip.add(t.videoId);
+      const s2 = suggest(1)[0];
+      if (!q || !s2) { toast('No other suggestion available'); renderSmart(); return; }
+      q.id = s2.t.id; q.auto = true;
+      save.queue(); renderQueue();
+      toast(`Swapped for "${s2.t.title || s2.t.videoId}" — ${s2.why[0]}`);
+    }
     else if (act === 'up') {
       const i = S.queue.findIndex(q => q.qid === qid);
       if (i > 0) { [S.queue[i - 1], S.queue[i]] = [S.queue[i], S.queue[i - 1]]; save.queue(); renderQueue(); }
@@ -1576,7 +1657,7 @@ function renderLibrary() {
     return `<tr draggable="true" data-id="${t.id}" style="--cc:${safeColor(c?.color)}">
       <td><img class="th lib-th" src="${thumb(t.videoId)}" alt="" loading="lazy"></td>
       <td><div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}<b>${esc(t.title || t.videoId)}</b></div>
-        <div class="dim"><i class="dot"></i>${esc(artistOf(t))}${t.tags ? ' · ' + esc(t.tags) : ''}</div>
+        <div class="dim">${creatorChip(t)}${t.tags ? ' · ' + esc(t.tags) : ''}${t.noAuto ? ' · <span class="manual-tag">manual only</span>' : ''}</div>
         ${t.flag ? `<div class="flag">⚠ ${esc(t.flag)}</div>` : ''}</td>
       <td class="dim">${t.duration ? fmt(t.duration) : '?:??'}</td>
       <td class="dim">${t.bpm ? Math.round(t.bpm) : '—'}</td>
@@ -1587,6 +1668,7 @@ function renderLibrary() {
         <button type="button" data-l="A" class="la" title="Load onto deck A">A</button>
         <button type="button" data-l="B" class="lb" title="Load onto deck B">B</button>
         <button type="button" data-l="q" title="Add to the queue">+Q</button>
+        <button type="button" data-l="auto" class="${t.noAuto ? 'off' : ''}" title="${t.noAuto ? 'Manual only: Smart DJ will never pick this song. Click to allow.' : 'Smart DJ may pick this song. Click to make it manual only.'}">🤖</button>
         <button type="button" data-l="open" title="Open on YouTube">↗</button>
         <button type="button" data-l="edit" title="Edit details, BPM and energy">✎</button>
         <button type="button" data-l="del" title="Remove from the approved library">✕</button>
@@ -1612,6 +1694,11 @@ function initLibraryUI() {
     const a = b.dataset.l;
     if (a === 'A' || a === 'B') decks[a].userLoad(t);
     else if (a === 'q') { addToQueue(t.id); toast(`Queued "${t.title || t.videoId}"`); }
+    else if (a === 'auto') {
+      if (t.noAuto) delete t.noAuto; else t.noAuto = true;
+      save.library(); renderLibrary(); renderSmart();
+      toast(t.noAuto ? `"${t.title}" is manual only — Smart DJ won't pick it` : `Smart DJ may pick "${t.title}" again`);
+    }
     else if (a === 'open') window.open('https://www.youtube.com/watch?v=' + t.videoId, '_blank', 'noopener');
     else if (a === 'edit') editTrack(t);
     else if (a === 'del' && await ask(`Remove "${t.title || t.videoId}" from the approved library?`, 'Remove')) {
@@ -1674,6 +1761,7 @@ function renderHistory() {
     const c = creatorById(h.creatorId) || creatorOf(byVid(h.videoId));
     return `<li style="--cc:${safeColor(c?.color)}" class="cc-row">
     <span class="num">${esc(h.deck)}</span>
+    <img class="th" src="${thumb(h.videoId)}" alt="" loading="lazy">
     <div class="grow"><div class="ttl">${esc(h.title || h.videoId)}</div><div class="sub"><i class="dot"></i>${esc(c?.name || h.artist || '')} · ${esc(h.license || '')}</div></div>
     <span class="len">${new Date(h.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></li>`;
   }).join('') || '<li class="dim">Nothing played yet.</li>';
@@ -1722,7 +1810,7 @@ async function importData(file) {
       const chan = /^UC[\w-]{22}$/.test(raw.channelId || '') ? raw.channelId : '';
       const existing = S.creators.find(c => (chan && c.channelId === chan) || c.name.toLowerCase() === String(raw.name).toLowerCase());
       if (existing) { crMap[raw.id] = existing.id; return; }
-      const c = { id: uid(), name: String(raw.name), channelId: chan, color: safeColor(raw.color), share: clamp(Math.round(+raw.share || 25), 1, 100) };
+      const c = { id: uid(), name: String(raw.name), channelId: chan, color: safeColor(raw.color), share: clamp(Math.round(+raw.share || 25), 1, 100), avatar: safeImg(raw.avatar), avatarUploaded: !!raw.avatarUploaded };
       S.creators.push(c); crMap[raw.id] = c.id;
     });
     const idMap = {};
@@ -1822,6 +1910,7 @@ function initMixerUI() {
   $('#panic').onclick = panic;
   $('#stageBtn').onclick = () => setStage(true);
   $('#stageExit').onclick = () => setStage(false);
+  $('#stageFull').onclick = toggleFullscreen;
   $('#helpBtn').onclick = () => $('#help').classList.remove('hidden');
   $('#helpClose').onclick = () => $('#help').classList.add('hidden');
   $('#modalOk').onclick = () => modalDone && modalDone(true);
@@ -1880,6 +1969,12 @@ window.onYouTubeIframeAPIReady = () => {
   decks.A.create(); decks.B.create(); Probe.init();
   const pill = $('#ytStatus'); pill.textContent = 'YouTube: ready'; pill.className = 'pill ok';
 };
+
+// Any song or creator picture that fails to load gets a neutral placeholder.
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (img.tagName === 'IMG' && img.src !== NO_IMG && !img.closest('.platter')) img.src = NO_IMG;
+}, true);
 
 function boot() {
   decks.A = new Deck('A', $('#mountA'));

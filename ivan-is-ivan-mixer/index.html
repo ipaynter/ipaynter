@@ -26,7 +26,7 @@
     <div class="clock-box" title="How long you have been on air"><label>SHOW</label><span id="showTimer">0:00:00</span></div>
     <div class="clock-box" title="Time of day"><label>CLOCK</label><span id="clock">--:--:--</span></div>
     <div class="clock-box" title="Total length of everything in the queue"><label>QUEUE</label><span id="queueTime">0:00</span></div>
-    <button id="stageBtn" class="stage-btn" type="button" data-cmd="stage" title="Stage view: a clean full-window display with the YouTube player and credits. Share THIS tab in StreamYard — the controls stay hidden from viewers.">◉ STAGE VIEW</button>
+    <button id="stageBtn" class="stage-btn" type="button" data-cmd="stage" title="Viewer page: the full YouTube video fills the window with a small badge (creator image, name, song title). Share THIS tab in StreamYard with tab audio. Press F inside for full screen.">◉ VIEWER PAGE</button>
   </div>
   <div class="top-right">
     <button id="inboxPill" class="pill pill-btn hidden" type="button" title="New uploads from your creators are waiting for approval">🔔 <span id="inboxPillN">0</span> new</button>
@@ -97,7 +97,7 @@
     </div>
     <div class="auto-opts">
       <label class="check" title="When tempo + downbeat are known, Auto DJ waits for the start of a bar before mixing"><input type="checkbox" id="snapBars"> Mix on the bar</label>
-      <label class="check" title="When the queue is empty, Auto DJ adds the best Smart Next pick (fair creator rotation, tempo, new releases)"><input type="checkbox" id="smartFill"> Smart fill</label>
+      <label class="check" title="ON: when the queue is empty, Auto DJ adds the best Smart Next pick. OFF: Smart DJ only suggests and nothing plays unless you queue it."><input type="checkbox" id="smartFill"> Smart fill</label>
     </div>
 
     <div class="xfader-wrap">
@@ -190,6 +190,7 @@
     <form id="crForm" class="cr-form" autocomplete="off">
       <input id="crName" placeholder="Creator name" required>
       <input id="crChannel" placeholder="YouTube channel link, @handle or channel ID (UC…)" title="Used to watch for new uploads. You can find the channel ID in YouTube: channel → About → Share channel → Copy channel ID.">
+      <label class="cr-img" title="Creator picture for the viewer badge. Filled in from their YouTube channel automatically; click to upload your own instead."><img id="crImgPrev" alt=""><span>Image</span><input id="crImg" type="file" accept="image/png,image/jpeg,image/webp"></label>
       <input id="crColor" type="color" value="#a78bfa" title="Creator color shown on decks, queue and stats">
       <label class="cr-share" title="Airtime share. Give your own songs more: e.g. you 40, each other writer 20. Smart DJ plays whoever is furthest below their share.">Share <input id="crShare" type="number" min="1" max="100" value="25"> %</label>
       <button type="submit" id="crSave" class="primary">Add creator</button>
@@ -257,28 +258,16 @@
   </div>
 </section>
 
-<!-- STAGE VIEW: what viewers see. The deck video players are moved on top of this. -->
-<div id="stage" class="stage hidden" aria-hidden="true">
-  <div class="stage-glow" id="stGlow"></div>
-  <div class="stage-top">
-    <div class="stage-brand">IVAN <em>is</em> IVAN</div>
-    <div class="stage-live"><span></span>LIVE</div>
-  </div>
-  <div class="stage-lower">
-    <div class="st-art" id="stArt"></div>
-    <div class="st-text">
-      <div class="st-label">NOW PLAYING</div>
-      <div class="st-title" id="stTitle"></div>
-      <div class="st-artist" id="stArtist"></div>
-      <div class="st-credit" id="stCredit"></div>
-      <div class="st-prog"><i id="stProg"></i></div>
-    </div>
-    <div class="st-side">
-      <div class="st-beat" id="stBeat"><i></i><i></i><i></i><i></i></div>
-      <div class="st-next"><label>UP NEXT</label><span id="stNext">—</span></div>
-    </div>
-  </div>
-  <button id="stageExit" class="stage-exit" type="button">Exit stage view (V)</button>
+<!-- STAGE VIEW: what viewers see. The full YouTube video fills the window; one small badge credits the creator. -->
+<!-- Badge and controls sit above the full-window video (siblings, not children, so the video can't cover them). -->
+<div id="stage" class="stage hidden" aria-hidden="true"></div>
+<div class="st-badge hidden" id="stBadge">
+  <img id="stAvatar" alt="">
+  <div class="st-badge-text"><div class="st-name" id="stName"></div><div class="st-song" id="stSong"></div></div>
+</div>
+<div class="stage-ctrl" title="">
+  <button id="stageFull" type="button">⛶ Full screen (F)</button>
+  <button id="stageExit" type="button">✕ Exit (V)</button>
 </div>
 
 <!-- non-blocking confirm (browser confirm() would freeze fades) -->
@@ -295,9 +284,9 @@
     <ol>
       <li><b>Creators tab:</b> add your creators and their YouTube channels. New uploads show up automatically — one click approves them.</li>
       <li><b>Library:</b> paste any approved link and press <i>Fetch info</i>. On a deck, press <b>TAP</b> to the beat and <b>GRID</b> on a downbeat once per song — it's saved forever.</li>
-      <li><b>Queue:</b> drag songs in, or use <b>Smart Next</b>.</li>
+      <li><b>Queue:</b> drag songs in, or use <b>Smart Next</b>. You always have the final say: songs marked <b>SMART</b> were picked for you — press <b>⇄</b> to swap one, ✕ to remove it, or drag your own song in front. <b>Not now</b> hides a suggestion for this show; 🤖 in the library stops a song ever being auto-picked.</li>
       <li>Go live in StreamYard, press <b>ON AIR</b>, then <b>AUTO DJ</b> — or mix by hand with <b>MIX ⇄</b> and the crossfader.</li>
-      <li>Press <b>STAGE VIEW</b> (V) and share this tab in StreamYard with <i>Share tab audio</i> ticked. Viewers see the official YouTube player and credits — not your controls.</li>
+      <li>Press <b>VIEWER PAGE</b> (V) and share this tab in StreamYard with <i>Share tab audio</i> ticked. Viewers see the full YouTube video with the creator&#39;s picture, name and song title — never your controls. Press <b>F</b> for full screen.</li>
       <li>Talking? Hit <b>TALK</b> (T) or turn on voice auto-duck.</li>
     </ol>
     <p class="dim">Hover over anything for help. Keys and Stream Deck URLs are in Settings.</p>

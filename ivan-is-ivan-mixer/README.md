@@ -22,7 +22,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 3. **Beats, once per song:** while it plays, press **TAP** to the beat 4+ times, then **GRID** exactly on a "1". This is saved forever.
 4. **Queue:** drag songs in, or use the **Smart Next** cards.
 5. Go live in StreamYard, press **ON AIR**, then **AUTO DJ**, or mix by hand.
-6. Press **STAGE VIEW** (V). This is the clean page you share in StreamYard.
+6. Press **VIEWER PAGE** (V). This is the page you share in StreamYard: the full video, nothing else but a small creator badge. Press **F** for full screen.
 7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
 
 ## What it does
@@ -64,11 +64,23 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 - **New-upload alerts:** checked at start-up and every 30 minutes, but never while you're on air. Uses YouTube's public channel feed. The 🔔 badge shows how many are waiting.
 - Creators can be linked by channel link, by `@handle`, or by channel ID (YouTube: channel → About → Share channel → Copy channel ID).
 
-**Stage view (what viewers see)**
-- A clean full-window page with the official YouTube player, the show name, a LIVE badge, NOW PLAYING, the creator, a permission credit, a progress bar, beat lights and UP NEXT.
+**Viewer page (what viewers see)**
+- The full YouTube video fills the whole window. Press **F** for true full screen.
+- One small badge in the corner shows the **creator's picture, name and song title**. It slides in again at every new song and changes colour with the creator.
 - The video crossfades along with the audio.
 - Your controls, pop-up messages and tooltips never appear on it.
+- To show the Full screen / Exit buttons, move the mouse to the top-right corner. Viewers never see them.
 - Press **V** or **Esc** to go back to the controls. The music keeps playing.
+- **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead. A writer with no picture shows the song's YouTube image.
+
+**You always have the final say over Smart DJ**
+- Songs that Smart DJ queued carry a **SMART** tag. Press **⇄** to swap one for the next-best pick, **✕** to remove it, or drag your own song in front of it.
+- Your own queued songs always play before Smart DJ adds anything. It only fills the queue when it's empty.
+- **Not now** on a suggestion hides that song for the rest of the show.
+- **🤖** in the library makes a song *manual only*. Smart DJ will never pick it, but you still can.
+- The deck waiting to play next says **SMART DJ PICK** or **YOUR PICK**. Load or drop any song onto it to change it.
+- Turn **Smart fill** off and Smart DJ only suggests. Nothing plays unless you queue it.
+- Every queued song shows its YouTube image and length.
 
 **Library, playlists, play log**
 - **Approved-only mode** (on by default): decks refuse any link that isn't in the library.
@@ -78,7 +90,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Getting the music into StreamYard
 
-1. **Share the tab (free, simplest).** Press **STAGE VIEW**. In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"* and tick **Also share tab audio**. Viewers see the stage page and hear the music. Control everything from the Stream Deck while it's on stage.
+1. **Share the tab (free, simplest).** Press **VIEWER PAGE**. In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"* and tick **Also share tab audio**. Viewers see the full video with the creator badge and hear the music. Control everything from the Stream Deck while it is shared.
 2. **Virtual audio mixer (best control).** Install the free **Voicemeeter** (Windows). Route your XLR interface and Chrome into it, and pick *Voicemeeter Output* as your mic in StreamYard.
 
 Run a private test broadcast first.
@@ -89,7 +101,7 @@ Open **Settings & Stream Deck**. Every action has a ready-made URL with a **Copy
 In the Stream Deck app, drag a **Website** action onto a key, paste the URL and tick **"GET request in background"**.
 These keys work even when StreamYard is the window in front.
 
-Good keys to set up first: Play A, Play B, MIX ⇄, Auto DJ, TALK, Stage view, Smart Next, Fade all out.
+Good keys to set up first: Play A, Play B, MIX ⇄, Auto DJ, TALK, Viewer page, Full screen, Smart Next, Fade all out.
 For the **Stream Deck +** dials, assign rotate left/right to `xfLeft` / `xfRight` or `masterDown` / `masterUp`. This depends on the dial plugin you use.
 
 The URLs contain a private key (`control-key.txt`), so other websites can't press your buttons. To change the key, delete that file and restart.
@@ -103,8 +115,9 @@ The URLs contain a private key (`control-key.txt`), so other websites can't pres
 | ← / → | Nudge crossfader | ↑ / ↓ | Master ±5 |
 | [ / ] | Deck A volume | ; / ' | Deck B volume |
 | D | Auto DJ | T | Talk duck |
-| O | On Air | V | Stage view |
-| Esc | Close / leave stage view (never stops music) | | |
+| O | On Air | V | Viewer page |
+| F | Viewer page full screen | | |
+| Esc | Close / leave the viewer page (never stops music) | | |
 
 ## Your data
 

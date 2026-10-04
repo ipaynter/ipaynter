@@ -72,17 +72,29 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 7.2 Tick **Voice auto-duck** and allow the mic. Speak, and the music dips. Stop, and it returns after about 1 second.
 - [ ] 7.3 If it dips with nobody talking, raise the trigger slider next to the mic meter.
 
-## 8. Stage view
+## 8. Viewer page
 
-- [ ] 8.1 Press **STAGE VIEW** (or V). You see the video, NOW PLAYING, the writer, UP NEXT and a LIVE badge, with no controls.
-- [ ] 8.2 During a mix, the video fades from one song to the next.
-- [ ] 8.3 Press **Esc**. You're back at the controls and **the music keeps playing**.
+- [ ] 8.1 Press **VIEWER PAGE** (or V). The **full video fills the whole window**. The only extra is a badge at bottom left with the creator's picture, name and song title.
+- [ ] 8.2 Press **F**. The page goes full screen. Press **F** again to leave full screen.
+- [ ] 8.3 During a mix, the video fades to the next song and the badge slides in with the new creator.
+- [ ] 8.4 Move the mouse to the top-right corner. The **Full screen / Exit** buttons appear. Move away and they vanish.
+- [ ] 8.5 Press **Esc**. You're back at the controls and **the music keeps playing**.
+- [ ] 8.6 Every writer shows their own picture. If one is missing, click ✎ on their card → **Image** → upload one → Save.
+
+## 8b. Overriding Smart DJ
+
+- [ ] 8b.1 Let Smart DJ fill the queue. Its songs show a **SMART** tag and each row shows the song's image.
+- [ ] 8b.2 Press **⇄** on a SMART song. It's replaced by another pick.
+- [ ] 8b.3 Queue your own song and drag it to the top. It plays before the SMART songs.
+- [ ] 8b.4 Press **Not now** on a suggestion. It doesn't come back during this show.
+- [ ] 8b.5 Library: press **🤖** on a song. It shows *manual only* and Smart DJ never picks it.
+- [ ] 8b.6 With Auto DJ on, the waiting deck says **SMART DJ PICK** or **YOUR PICK**. Drop another song on it and that song plays instead.
 
 ## 9. StreamYard (private broadcast)
 
 - [ ] 9.1 StreamYard: set your XLR mic as normal.
 - [ ] 9.2 **Share screen → Chrome Tab → "Ivan is Ivan — Live Mixer"**, and tick **Also share tab audio**.
-- [ ] 9.3 Put the share on stage. Viewers see Stage view.
+- [ ] 9.3 Put the share on stage. Viewers see the full video with the creator badge.
 - [ ] 9.4 Start a **private / unlisted** test broadcast. Talk over music using TALK.
 - [ ] 9.5 Watch the recording afterwards:
   - Is the music level right under your voice? Adjust MASTER if needed.
@@ -93,7 +105,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 10.1 Mixer **Settings & Stream Deck** tab: click **Copy** next to "Play / pause Deck A".
 - [ ] 10.2 Stream Deck app: drag **Website** onto a key, paste the URL, tick **GET request in background**.
 - [ ] 10.3 Click into StreamYard so the mixer is in the background, then press the key. Deck A plays or pauses.
-- [ ] 10.4 Repeat for MIX ⇄, Auto DJ, TALK, Stage view and Fade all out.
+- [ ] 10.4 Repeat for MIX ⇄, Auto DJ, TALK, Viewer page, Full screen and Fade all out.
 
 ## 11. After the show
 
@@ -113,7 +125,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 ---
 
-**Result:** ___ of 13 sections passed.  Date: ________
+**Result:** ___ of 14 sections passed.  Date: ________
 
 Failures (step number + what happened):
 
