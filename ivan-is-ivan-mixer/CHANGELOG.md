@@ -23,6 +23,8 @@ Commit: `e5cb49a`
 - **Fixed:** dragging a YouTube link onto the mixer did nothing. The deck videos (embedded YouTube pages) swallowed the drop, and other areas weren't drop targets.
 - While you drag a link, a drop screen now appears with three big boxes: **Deck A · Queue · Deck B**. Dropping anywhere on it works, and Chrome no longer opens the link instead.
 - The videos no longer catch the mouse. The mixer controls them, so nothing is lost.
+- One handler takes every dropped link, so a drop can never add a song twice.
+- Checked with a real browser-level drag over a real embedded page. The old version failed that test and this one passes. Dragging inside the mixer (library to deck, reordering the queue) still works.
 
 ## v2.5.0 — 2026-10-04 — Version tracking
 Commit: `924236a`

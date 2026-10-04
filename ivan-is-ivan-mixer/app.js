@@ -309,18 +309,11 @@ class Deck {
       this.seek(((e.clientX - rect.left) / rect.width) * this.dur);
     });
     this.r.url.addEventListener('keydown', e => { if (e.key === 'Enter') this.act_load(); });
-    this.el.addEventListener('dragover', e => { if (drag || linkDrag(e)) { e.preventDefault(); this.el.classList.add('drop'); } });
+    this.el.addEventListener('dragover', e => { if (drag) { e.preventDefault(); this.el.classList.add('drop'); } });
     this.el.addEventListener('dragleave', e => { if (!this.el.contains(e.relatedTarget)) this.el.classList.remove('drop'); });
     this.el.addEventListener('drop', e => {
       e.preventDefault(); this.el.classList.remove('drop');
-      if (!drag) {
-        // A YouTube link dragged in from another tab or page: first song to this deck, the rest to the queue.
-        const tracks = ingestLinks(droppedText(e));
-        if (!tracks.length) return;
-        this.userLoad(tracks[0]);
-        tracks.slice(1).forEach(t => addToQueue(t.id));
-        return;
-      }
+      if (!drag) return; // links from outside are handled once, by the drop screen handler
       const { id, qid } = drag; drag = null;
       this.userLoad(byId(id)).then(ok => { if (ok && qid) removeFromQueue(qid); });
     });
@@ -1542,19 +1535,13 @@ function initQueueUI() {
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', li.dataset.id);
   });
   list.addEventListener('dragover', e => {
-    if (!drag && !linkDrag(e)) return; e.preventDefault();
+    if (!drag) return; e.preventDefault();
     $$('li.dragover', list).forEach(x => x.classList.remove('dragover'));
     e.target.closest('li')?.classList.add('dragover');
   });
   list.addEventListener('drop', e => {
-    if (!drag && !linkDrag(e)) return; e.preventDefault();
+    if (!drag) return; e.preventDefault();
     const target = e.target.closest('li');
-    if (!drag) {
-      let at = target ? S.queue.findIndex(q => q.qid === target.dataset.qid) : S.queue.length;
-      if (at < 0) at = S.queue.length;
-      ingestLinks(droppedText(e)).forEach(t => addToQueue(t.id, at++));
-      return;
-    }
     let index = target ? S.queue.findIndex(q => q.qid === target.dataset.qid) : S.queue.length;
     if (drag.qid) {
       const from = S.queue.findIndex(q => q.qid === drag.qid);
@@ -1567,11 +1554,10 @@ function initQueueUI() {
   });
   // allow dropping library rows on the empty area around the list
   const body = $('[data-body="queue"]');
-  body.addEventListener('dragover', e => { if ((drag && !drag.qid) || linkDrag(e)) e.preventDefault(); });
+  body.addEventListener('dragover', e => { if (drag && !drag.qid) e.preventDefault(); });
   body.addEventListener('drop', e => {
     if (e.target.closest('#queueList')) return;
     if (drag && !drag.qid) { e.preventDefault(); addToQueue(drag.id); drag = null; }
-    else if (!drag && linkDrag(e)) { e.preventDefault(); ingestLinks(droppedText(e)).forEach(t => addToQueue(t.id)); }
   });
 
   $('#qClear').onclick = async () => { if (S.queue.length && await ask('Clear the whole queue?', 'Clear')) { S.queue = []; save.queue(); renderQueue(); } };
@@ -1845,7 +1831,8 @@ document.addEventListener('drop', e => {
   if (!linkDrag(e)) return;
   e.preventDefault();
   clearTimeout(dzTimer); showDropZone(false);
-  const where = e.target.closest?.('.dz')?.dataset.dz || 'Q';
+  const deckEl = e.target.closest?.('.deck');
+  const where = e.target.closest?.('.dz')?.dataset.dz || (deckEl ? (deckEl.classList.contains('deck-a') ? 'A' : 'B') : 'Q');
   const tracks = ingestLinks(droppedText(e));
   if (!tracks.length) return;
   if (where === 'Q') { tracks.forEach(t => addToQueue(t.id)); toast(`Queued ${tracks.length} song${tracks.length === 1 ? '' : 's'}`, 'good'); }
