@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ivan is Ivan — Live Mixer</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Power-on splash: Chrome needs one click before it allows audio -->
+<div id="splash" class="splash">
+  <div class="splash-inner">
+    <div class="logo-big">IVAN <em>is</em> IVAN</div>
+    <div class="logo-sub">LIVE MIXER</div>
+    <button id="power" class="power" type="button">⏻ POWER ON</button>
+    <p class="hint">One click wakes up the audio. Approved music only.</p>
+    <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Close it and start the mixer with <b>start-windows.bat</b> (or <b>start-mac-linux.sh</b>).</p>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-dot"></span>IVAN <em>is</em> IVAN <small>LIVE MIXER</small></div>
+  <div class="top-center">
+    <button id="onair" class="onair" type="button" title="On Air (O)">ON AIR</button>
+    <div class="clock-box"><label>SHOW</label><span id="showTimer">0:00:00</span></div>
+    <div class="clock-box"><label>CLOCK</label><span id="clock">--:--:--</span></div>
+    <div class="clock-box"><label>QUEUE</label><span id="queueTime">0:00</span></div>
+  </div>
+  <div class="top-right">
+    <span id="remoteStatus" class="pill">Stream Deck: …</span>
+    <span id="ytStatus" class="pill">YouTube: loading…</span>
+  </div>
+</header>
+
+<div id="deadAir" class="dead-air hidden">⚠ DEAD AIR — NO MUSIC PLAYING</div>
+
+<main class="console">
+  <div id="mountA" class="deck-mount"></div>
+
+  <section class="mixer">
+    <div class="panel-label">MIXER</div>
+
+    <div class="channels">
+      <div class="channel ch-a">
+        <label>A</label>
+        <div class="fader-row">
+          <div class="meter" id="meterA"><i></i></div>
+          <input type="range" class="vfader" id="volA" min="0" max="100" value="80" aria-label="Deck A volume">
+        </div>
+        <span class="val" id="volAVal">80</span>
+      </div>
+      <div class="channel ch-m">
+        <label>MASTER</label>
+        <div class="fader-row">
+          <div class="meter" id="meterM"><i></i></div>
+          <input type="range" class="vfader" id="master" min="0" max="100" value="90" aria-label="Master volume">
+        </div>
+        <span class="val" id="masterVal">90</span>
+      </div>
+      <div class="channel ch-b">
+        <label>B</label>
+        <div class="fader-row">
+          <div class="meter" id="meterB"><i></i></div>
+          <input type="range" class="vfader" id="volB" min="0" max="100" value="80" aria-label="Deck B volume">
+        </div>
+        <span class="val" id="volBVal">80</span>
+      </div>
+    </div>
+    <div class="meter-note">Meters show output level sent to YouTube's player.</div>
+
+    <div class="talk-block">
+      <button id="talk" class="btn talk" type="button" title="Talk-over duck (T)">🎙 TALK</button>
+      <div class="talk-opts">
+        <label>Duck to <b id="duckVal">25%</b>
+          <input type="range" id="duckLevel" min="0" max="70" value="25"></label>
+        <label class="check"><input type="checkbox" id="voiceDuck"> Voice auto-duck (mic)</label>
+        <div class="mic-row">
+          <div class="mini-meter" id="micMeter"><i></i><b id="micThreshMark"></b></div>
+          <input type="range" id="voiceThresh" min="5" max="90" value="35" title="Voice trigger level">
+        </div>
+      </div>
+    </div>
+
+    <div class="auto-block">
+      <button id="autoDJ" class="btn autodj" type="button" title="Auto DJ (D)">AUTO DJ</button>
+      <button id="mixNow" class="btn mixnow" type="button" title="Mix to other deck (Space)">MIX ⇄</button>
+      <label class="fade">FADE <input type="number" id="fadeSec" min="0" max="30" step="1" value="8"> s</label>
+    </div>
+
+    <div class="xfader-wrap">
+      <div class="xf-head">
+        <span class="xf-a">A</span>
+        <select id="curve" title="Crossfader curve">
+          <option value="smooth">Smooth (constant power)</option>
+          <option value="linear">Linear</option>
+          <option value="cut">Scratch cut</option>
+        </select>
+        <span class="xf-b">B</span>
+      </div>
+      <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader">
+      <div class="xf-snap">
+        <button type="button" data-xf="0">◀ A</button>
+        <button type="button" data-xf="0.5">CENTER</button>
+        <button type="button" data-xf="1">B ▶</button>
+      </div>
+    </div>
+
+    <button id="panic" class="btn panic" type="button" title="Fade everything out in 2 s (Esc)">FADE ALL OUT</button>
+  </section>
+
+  <div id="mountB" class="deck-mount"></div>
+</main>
+
+<section class="browser">
+  <nav class="tabs">
+    <button type="button" data-tab="queue" class="active">QUEUE <span id="queueCount" class="count">0</span></button>
+    <button type="button" data-tab="library">APPROVED LIBRARY <span id="libCount" class="count">0</span></button>
+    <button type="button" data-tab="playlists">PLAYLISTS</button>
+    <button type="button" data-tab="history">PLAY LOG &amp; CREDITS</button>
+    <button type="button" data-tab="settings">SETTINGS &amp; STREAM DECK</button>
+  </nav>
+
+  <!-- QUEUE -->
+  <div class="tab-body" data-body="queue">
+    <div class="bar-row">
+      <span class="dim">Drag tracks here from the library. Drag rows to reorder. Drag a row onto a deck to load it.</span>
+      <span class="spacer"></span>
+      <button type="button" id="qShuffle">Shuffle</button>
+      <button type="button" id="qClear" class="danger">Clear</button>
+      <input id="plName" placeholder="Playlist name">
+      <button type="button" id="qSave">Save as playlist</button>
+    </div>
+    <ol id="queueList" class="list queue-list"></ol>
+  </div>
+
+  <!-- LIBRARY -->
+  <div class="tab-body hidden" data-body="library">
+    <form id="libForm" class="lib-form" autocomplete="off">
+      <input id="libUrl" placeholder="YouTube link (watch, youtu.be, shorts…)" required>
+      <button type="button" id="libFetch">Fetch info</button>
+      <input id="libTitle" placeholder="Title">
+      <input id="libArtist" placeholder="Creator / artist">
+      <input id="libLicense" placeholder="Permission (e.g. Written OK by creator, CC-BY)">
+      <input id="libDate" type="date" title="Date approved">
+      <input id="libTags" placeholder="Tags (intro, chill, outro…)">
+      <input id="libNotes" placeholder="Notes / credit text">
+      <span id="libInfo" class="dim"></span>
+      <button type="submit" id="libSave" class="primary">Add to approved library</button>
+      <button type="button" id="libCancel" class="hidden">Cancel edit</button>
+    </form>
+    <div class="bar-row">
+      <input id="libSearch" placeholder="Search title, creator, tag, permission…" class="grow">
+      <button type="button" id="libProbeAll" title="Look up missing song lengths">Fill missing lengths</button>
+    </div>
+    <table class="lib-table">
+      <thead><tr><th></th><th>Track</th><th>Length</th><th>Permission</th><th>Plays</th><th></th></tr></thead>
+      <tbody id="libBody"></tbody>
+    </table>
+  </div>
+
+  <!-- PLAYLISTS -->
+  <div class="tab-body hidden" data-body="playlists">
+    <div class="bar-row"><span class="dim">Save the queue as a playlist from the Queue tab. Load replaces the queue, Append adds to the end.</span></div>
+    <ul id="plList" class="list"></ul>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="tab-body hidden" data-body="history">
+    <div class="bar-row">
+      <button type="button" id="credShow">Credits: this show</button>
+      <button type="button" id="credToday">Credits: today</button>
+      <button type="button" id="credCopy" class="primary">Copy credits</button>
+      <span class="spacer"></span>
+      <button type="button" id="histClear" class="danger">Clear log</button>
+    </div>
+    <textarea id="credits" rows="5" placeholder="Credits for your YouTube description appear here."></textarea>
+    <ul id="histList" class="list"></ul>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="tab-body hidden" data-body="settings">
+    <div class="settings-grid">
+      <div class="card">
+        <h3>Mixing</h3>
+        <label>Warn when a song has less than <input type="number" id="warnSec" min="5" max="120" value="30"> s left</label>
+        <label>Dead-air alarm
+          <select id="deadAirMode">
+            <option value="autodj">On Air + Auto DJ on</option>
+            <option value="always">Any time On Air</option>
+            <option value="off">Off</option>
+          </select></label>
+        <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play tracks in the library)</label>
+      </div>
+      <div class="card">
+        <h3>Backup</h3>
+        <p class="dim">Everything is stored in this browser only, on this computer. Nothing is sent anywhere except to YouTube to play videos. Back up often.</p>
+        <button type="button" id="exportBtn" class="primary">Export backup (.json)</button>
+        <label class="file-btn">Import backup<input type="file" id="importFile" accept=".json,application/json"></label>
+      </div>
+      <div class="card wide">
+        <h3>Stream Deck &amp; keyboard</h3>
+        <p class="dim">Best: Stream Deck <b>Website</b> action with <b>"GET request in background"</b> ticked. Works even when StreamYard has focus.
+          Keyboard keys only work when this mixer window has focus.</p>
+        <table class="keys"><thead><tr><th>Action</th><th>Key</th><th>Stream Deck URL</th><th></th></tr></thead><tbody id="keysBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<template id="deckTpl">
+  <section class="deck">
+    <div class="deck-head">
+      <span class="deck-letter" data-r="letter"></span>
+      <div class="deck-title"><div class="t-title" data-r="title"></div><div class="t-artist" data-r="artist"></div></div>
+      <span class="deck-state" data-r="state">EMPTY</span>
+    </div>
+    <div class="screen"><div class="player-host"><div data-r="player"></div></div></div>
+    <div class="times">
+      <div class="time-box"><label>ELAPSED</label><span data-r="elapsed">0:00</span></div>
+      <div class="time-box big"><label>TIME TO END</label><span data-r="remain">-0:00</span></div>
+      <div class="time-box"><label>LENGTH</label><span data-r="length">0:00</span></div>
+    </div>
+    <div class="progress" data-r="progress" title="Click to jump">
+      <div class="bar" data-r="bar"></div>
+      <div class="markers" data-r="markers"></div>
+      <div class="playhead" data-r="playhead"></div>
+    </div>
+    <div class="mixout" data-r="mixout"></div>
+    <div class="transport">
+      <button type="button" class="btn cue" data-a="cue" title="CDJ cue: paused = set cue, playing = back to cue">CUE</button>
+      <button type="button" class="btn play" data-a="play" data-r="playBtn">▶</button>
+      <button type="button" data-a="restart" title="Back to start point">⏮</button>
+      <button type="button" data-a="back">−10s</button>
+      <button type="button" data-a="fwd">+10s</button>
+    </div>
+    <div class="pads">
+      <div class="pad-group"><span>HOT CUES</span>
+        <button type="button" data-hc="0">1</button><button type="button" data-hc="1">2</button>
+        <button type="button" data-hc="2">3</button><button type="button" data-hc="3">4</button>
+      </div>
+      <div class="pad-group"><span>LOOP</span>
+        <button type="button" data-a="loopIn">IN</button><button type="button" data-a="loopOut">OUT</button>
+        <button type="button" data-a="loop8" data-r="loop8">8s</button><button type="button" data-a="loopExit">EXIT</button>
+      </div>
+      <div class="pad-group"><span>TRIM</span>
+        <button type="button" data-a="setIn" title="Track starts here (skip intros/silence)">START</button>
+        <button type="button" data-a="setOut" title="Auto DJ mixes out here (skip outros)">MIX-OUT</button>
+        <button type="button" data-a="clearTrim" title="Clear start / mix-out">CLR</button>
+      </div>
+    </div>
+    <div class="load-row">
+      <input data-r="url" placeholder="Paste approved YouTube link…">
+      <button type="button" data-a="load">LOAD</button>
+      <button type="button" data-a="next" title="Load next from queue">NEXT ⤵</button>
+    </div>
+  </section>
+</template>
+
+<div id="toasts" class="toasts"></div>
+<div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
+
+<script src="app.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
