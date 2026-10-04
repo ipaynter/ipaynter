@@ -177,6 +177,7 @@
     </form>
     <div class="bar-row">
       <input id="libSearch" placeholder="Search title, creator, tag, permission…" class="grow">
+      <button type="button" id="libImportBtn" class="primary" title="Bring in your existing music list: paste it, or pick a CSV / text file exported from your Rundown console or a spreadsheet">📥 Import list</button>
       <button type="button" id="libProbeAll" title="Look up any missing song lengths">Fill missing lengths</button>
     </div>
     <table class="lib-table">
@@ -275,6 +276,31 @@
   <div class="modal-box">
     <p id="modalMsg"></p>
     <div class="modal-btns"><button type="button" id="modalCancel">Cancel</button><button type="button" id="modalOk" class="primary">OK</button></div>
+  </div>
+</div>
+
+<div id="imp" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-box imp-box">
+    <h2>Import your music list</h2>
+    <p class="dim">Paste the list from your Rundown console (or any document or spreadsheet), or choose a file: your saved <b>Rundown Console.html</b>, or a .csv / .txt / .json export.
+      Every YouTube link is found automatically. Nothing is added until you press <b>Add</b>.</p>
+    <textarea id="impText" rows="7" placeholder="Paste here. For example:&#10;My Song Title - Ivan  https://youtu.be/abc123defgh&#10;Another Song | Writer 2 | https://www.youtube.com/watch?v=xyz987uvwab"></textarea>
+    <div class="bar-row">
+      <label class="file-btn">Choose file…<input type="file" id="impFile" accept=".html,.htm,.csv,.txt,.tsv,.json,text/html,text/csv,text/plain,application/json"></label>
+      <button type="button" id="impRead" class="primary">Read list</button>
+      <span id="impInfo" class="dim"></span>
+    </div>
+    <div id="impPreview" class="hidden">
+      <div class="bar-row">
+        <label>Set creator for all checked: <select id="impAllCreator"><option value="">—</option></select></label>
+        <span class="spacer"></span>
+        <label class="check"><input type="checkbox" id="impQueue"> Add to the queue in this order</label>
+        <label class="check"><input type="checkbox" id="impPl" checked> Save as playlist</label>
+        <input id="impPlName" value="Rundown import">
+      </div>
+      <div class="imp-list"><table class="lib-table"><thead><tr><th><input type="checkbox" id="impAll" checked title="Select all"></th><th></th><th>Title</th><th>Creator</th><th>Link</th></tr></thead><tbody id="impBody"></tbody></table></div>
+    </div>
+    <div class="modal-btns"><button type="button" id="impCancel">Cancel</button><button type="button" id="impAdd" class="primary" disabled>Add songs</button></div>
   </div>
 </div>
 

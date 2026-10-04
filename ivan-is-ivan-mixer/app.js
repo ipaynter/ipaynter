@@ -690,8 +690,11 @@ const Probe = {
 function probeLength(t) {
   if (!S.ytReady || t.duration) return;
   Probe.get(t.videoId).then(p => {
-    if (p?.duration) t.duration = p.duration;
-    else if (p?.error) t.flag = 'will not play in embed (error ' + p.error + ')';
+    if (p?.duration) {
+      t.duration = p.duration;
+      if (!t.title && p.title) t.title = p.title;
+      if (!t.artist && !creatorOf(t) && p.author) t.artist = p.author;
+    } else if (p?.error) t.flag = 'will not play in embed (error ' + p.error + ')';
     save.library(); renderLibrary(); renderQueue();
   });
 }
@@ -1368,11 +1371,13 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (modalDone) modalDone(false);
     else if (!$('#help').classList.contains('hidden')) $('#help').classList.add('hidden');
+    else if (!$('#imp').classList.contains('hidden')) $('#imp').classList.add('hidden');
     else if (e.target.closest('input, textarea, select')) e.target.blur();
     else if (S.stage) setStage(false);
     return;
   }
   if (modalDone || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (!$('#imp').classList.contains('hidden') || !$('#help').classList.contains('hidden')) return;
   if (e.target.closest('input, textarea, select')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const name = KEYMAP[k];
@@ -1727,6 +1732,243 @@ function initLibraryUI() {
   };
 }
 
+/* ---------------- import a music list (Rundown console, spreadsheet, text) ---------------- */
+
+const ytUrls = line => line.match(/https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be|youtube-nocookie\.com)\/[^\s"'<>,;|]+/gi) || [];
+
+// Match a creator by exact name, else the longest creator name found inside the text.
+function matchCreator(text) {
+  const low = String(text || '').toLowerCase().trim();
+  if (!low) return null;
+  return S.creators.find(c => c.name.toLowerCase() === low) ||
+    S.creators.filter(c => new RegExp('\\b' + c.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(low))
+      .sort((a, b) => b.name.length - a.name.length)[0] || null;
+}
+
+function splitCSV(text, delim) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.some(x => x.trim())) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  row.push(cell);
+  if (row.some(x => x.trim())) rows.push(row);
+  return rows;
+}
+
+// Returns { items: [{videoId, title, artist, creatorId, license, notes, bpm}], noLink, json }
+function parseMusicList(text) {
+  text = String(text || '').replace(/^\uFEFF/, '').trim();
+  if (!text) return { items: [], noLink: 0 };
+  try { const j = JSON.parse(text); if (j && Array.isArray(j.library)) return { json: text, items: [], noLink: 0 }; } catch { /* not JSON */ }
+  if (/<(html|body|table|div|a|ul|ol)\b/i.test(text)) return parseHtmlList(text);
+  const out = [], seen = new Set();
+  let noLink = 0;
+  const push = it => {
+    if (!it.videoId || seen.has(it.videoId)) return;
+    seen.add(it.videoId);
+    const c = matchCreator(it.artist) || (!it.artist ? matchCreator(it.title) : null);
+    out.push({ ...it, creatorId: c?.id || '', title: (it.title || '').trim(), artist: (it.artist || '').trim() });
+  };
+  const first = text.split(/\r?\n/)[0];
+  const delim = ['\t', ',', ';'].map(d => [d, first.split(d).length - 1]).sort((a, b) => b[1] - a[1])[0];
+  // Spreadsheet / CSV with a header row
+  if (delim[1] >= 1) {
+    const rows = splitCSV(text, delim[0]);
+    const hdr = rows[0].map(h => h.trim().toLowerCase());
+    const col = (names, not = -1) => hdr.findIndex((h, i) => i !== not && names.some(n => h.includes(n)));
+    const cUrl = col(['url', 'link', 'youtube', 'video']);
+    const cArtist = col(['artist', 'creator', 'writer', 'author', 'channel', 'composer']);
+    const cTitle = col(['title', 'song', 'track', 'name'], cArtist);
+    const cLic = col(['permission', 'license', 'licence', 'rights']);
+    const cNotes = col(['note', 'credit', 'comment']);
+    const cBpm = col(['bpm', 'tempo']);
+    if (cUrl >= 0 || cTitle >= 0) {
+      for (const r of rows.slice(1)) {
+        const vid = parseVideoId((cUrl >= 0 ? r[cUrl] : '') || '') || parseVideoId(ytUrls(r.join(' '))[0] || '');
+        if (!vid) { noLink++; continue; }
+        push({ videoId: vid, title: cTitle >= 0 ? r[cTitle] : '', artist: cArtist >= 0 ? r[cArtist] : '',
+          license: cLic >= 0 ? (r[cLic] || '').trim() : '', notes: cNotes >= 0 ? (r[cNotes] || '').trim() : '',
+          bpm: cBpm >= 0 ? parseFloat(r[cBpm]) : NaN });
+      }
+      return { items: out, noLink };
+    }
+  }
+  // Free text: any line with a YouTube link; the rest of the line is the title (and maybe the creator)
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const urls = ytUrls(line);
+    if (!urls.length) { noLink++; continue; }
+    let rest = line;
+    urls.forEach(u => { rest = rest.replace(u, ' '); });
+    rest = rest.replace(/^\s*(\d+\s*[.):-]\s*|[-*•]\s*)/, '').replace(/\s+/g, ' ').replace(/^[\s\-–—|:,]+|[\s\-–—|:,]+$/g, '');
+    const parts = rest.split(/\s+[-–—|]\s+|\t/).map(x => x.trim()).filter(Boolean);
+    let title = rest, artist = '';
+    const ci = parts.findIndex(x => matchCreator(x)?.name.toLowerCase() === x.toLowerCase());
+    if (parts.length > 1 && ci >= 0) { artist = parts[ci]; title = parts.filter((_, i) => i !== ci).join(' - '); }
+    urls.forEach(u => { const vid = parseVideoId(u.replace(/[).\]]+$/, '')); if (vid) push({ videoId: vid, title, artist }); });
+  }
+  return { items: out, noLink };
+}
+
+// A saved web page (e.g. "Rundown Console.html"). The page is only read as text: its scripts never run.
+function parseHtmlList(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const out = [], seen = new Set();
+  const GENERIC = /^(watch|link|play|open|youtube|video|here|listen|go|view|▶|►)$/i;
+  const clean = str => String(str || '').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ')
+    .replace(/^[\s\d.):\-–—|•*]+|[\s\-–—|:,]+$/g, '').replace(/\s+(by|from|feat\.?)$/i, '').trim();
+  const cellText = row => row.cells ? [...row.cells].map(c => c.textContent.trim()).filter(Boolean).join(' | ') : row.textContent;
+  const add = (vid, title, context, artistText = '') => {
+    if (!vid || seen.has(vid)) return;
+    seen.add(vid);
+    const c = matchCreator(artistText) || matchCreator(context) || matchCreator(title);
+    let t = clean(title);
+    if (c) t = clean(t.replace(new RegExp(c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), ' '));
+    if (GENERIC.test(t)) t = '';
+    out.push({ videoId: vid, title: t.slice(0, 120), artist: c?.name || clean(artistText), creatorId: c?.id || '' });
+  };
+  const vidIn = el => [...el.querySelectorAll('a[href], iframe[src]')].map(e => parseVideoId(e.getAttribute('href') || e.getAttribute('src') || '')).find(Boolean)
+    || parseVideoId(ytUrls(el.textContent)[0] || '');
+  // 0) tables: read them like a spreadsheet, using the header names
+  doc.querySelectorAll('table').forEach(tb => {
+    const rows = [...tb.rows];
+    if (!rows.length) return;
+    const hdrRow = rows.find(r => r.querySelector('th')) || rows[0];
+    const hdr = [...hdrRow.cells].map(c => c.textContent.trim().toLowerCase());
+    const col = (names, not = -1) => hdr.findIndex((h, i) => i !== not && names.some(n => h.includes(n)));
+    const cA = col(['artist', 'creator', 'writer', 'author', 'channel', 'composer']);
+    const cT = col(['title', 'song', 'track', 'name', 'music'], cA);
+    rows.forEach(r => {
+      if (r === hdrRow) return;
+      const vid = vidIn(r);
+      if (!vid) return;
+      const cells = [...r.cells].map(c => c.textContent.trim());
+      const link = r.querySelector('a[href]')?.textContent.trim() || '';
+      const title = (cT >= 0 && cells[cT]) || (!GENERIC.test(link) && !/youtu/i.test(link) ? link : '') || cellText(r);
+      add(vid, title, cellText(r), cA >= 0 ? cells[cA] : '');
+    });
+  });
+  // 1) links and embedded players, titled from their link text or the row they sit in
+  doc.querySelectorAll('a[href], iframe[src], [data-url], [data-href], [data-link], [data-src]').forEach(el => {
+    const url = el.getAttribute('href') || el.getAttribute('src') || el.dataset.url || el.dataset.href || el.dataset.link || el.dataset.src;
+    const vid = parseVideoId(url || '');
+    if (!vid) return;
+    const row = el.closest('tr, li, [class*="row"], [class*="item"], [class*="cue"], [class*="song"], [class*="track"], [class*="segment"]') || el.parentElement;
+    const own = el.tagName === 'A' ? el.textContent : '';
+    const ctx = row ? cellText(row) : own;
+    add(vid, own && !/youtu/i.test(own) && !GENERIC.test(own.trim()) && clean(own).length > 1 ? own : ctx, ctx);
+  });
+  // 2) links typed as plain text in the page
+  for (const line of (doc.body?.innerText || doc.body?.textContent || '').split(/\n/)) {
+    ytUrls(line).forEach(u => add(parseVideoId(u.replace(/[).\]]+$/, '')), line, line));
+  }
+  // 3) links stored inside the page's own data (scripts, attributes): titles are looked up later
+  ytUrls(html.replace(/\\\//g, '/')).forEach(u => add(parseVideoId(u.replace(/[).\]]+$/, '')), '', ''));
+  return { items: out, noLink: 0, html: true };
+}
+
+let impItems = [];
+
+function renderImport() {
+  const opts = '<option value="">— none —</option>' + S.creators.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('#impAllCreator').innerHTML = '<option value="">—</option>' + S.creators.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('#impBody').innerHTML = impItems.map((it, i) => {
+    const have = byVid(it.videoId);
+    return `<tr data-i="${i}" class="${have ? 'dupe' : ''}">
+      <td><input type="checkbox" class="imp-ck" checked></td>
+      <td><img class="th lib-th" src="${thumb(it.videoId)}" alt="" loading="lazy"></td>
+      <td>${have ? `<b>${esc(have.title || it.title || it.videoId)}</b><div class="dim">already in library — kept as is</div>`
+        : `<input class="imp-title" value="${esc(it.title)}" placeholder="(title filled in automatically)">`}</td>
+      <td>${have ? esc(artistOf(have)) : `<select class="imp-cr">${opts}</select>${it.artist && !it.creatorId ? `<div class="dim">${esc(it.artist)}</div>` : ''}`}</td>
+      <td class="link">youtu.be/${esc(it.videoId)}</td></tr>`;
+  }).join('');
+  $$('#impBody tr').forEach(tr => { const sel = tr.querySelector('.imp-cr'); if (sel) sel.value = impItems[+tr.dataset.i].creatorId || ''; });
+  const fresh = impItems.filter(it => !byVid(it.videoId)).length;
+  $('#impPreview').classList.toggle('hidden', !impItems.length);
+  $('#impAdd').disabled = !impItems.length;
+  $('#impAdd').textContent = `Add ${impItems.length} song${impItems.length === 1 ? '' : 's'}`;
+  return fresh;
+}
+
+function readImport() {
+  const r = parseMusicList($('#impText').value);
+  if (r.json) { $('#imp').classList.add('hidden'); importData({ text: async () => r.json }); return; }
+  impItems = r.items;
+  const fresh = renderImport();
+  $('#impInfo').textContent = impItems.length
+    ? `Found ${impItems.length} YouTube link${impItems.length === 1 ? '' : 's'} (${fresh} new, ${impItems.length - fresh} already in library)${r.noLink ? ` · ${r.noLink} line${r.noLink === 1 ? '' : 's'} without a YouTube link skipped` : ''}`
+    : (r.html ? 'No YouTube links found in this page. Open your Rundown Console in Chrome, press Ctrl+A then Ctrl+C, and paste here instead.'
+      : 'No YouTube links found. Paste the list again, or export it from Rundown as CSV or text.');
+}
+
+function addImport() {
+  const ids = [];
+  let added = 0;
+  $$('#impBody tr').forEach(tr => {
+    if (!tr.querySelector('.imp-ck').checked) return;
+    const it = impItems[+tr.dataset.i];
+    let t = byVid(it.videoId);
+    if (!t) {
+      const creatorId = tr.querySelector('.imp-cr')?.value || '';
+      const c = creatorById(creatorId);
+      t = {
+        id: uid(), videoId: it.videoId, url: 'https://www.youtube.com/watch?v=' + it.videoId,
+        title: (tr.querySelector('.imp-title')?.value || '').trim(), artist: c?.name || it.artist || '',
+        license: it.license || 'Full permission — creator', approvedOn: today(), tags: '', notes: it.notes || '',
+        duration: 0, plays: 0, addedAt: Date.now()
+      };
+      if (creatorId) t.creatorId = creatorId;
+      if (it.bpm >= 40 && it.bpm <= 220) t.bpm = Math.round(it.bpm * 10) / 10;
+      S.library.push(t); added++;
+      probeLength(t);
+    }
+    ids.push(t.id);
+  });
+  if (!ids.length) { toast('Nothing checked'); return; }
+  if ($('#impQueue').checked) ids.forEach(id => S.queue.push({ qid: uid(), id }));
+  const plName = $('#impPlName').value.trim();
+  if ($('#impPl').checked && plName) {
+    const ex = S.playlists.find(p => p.name.toLowerCase() === plName.toLowerCase());
+    if (ex) ex.items = ids; else S.playlists.push({ id: uid(), name: plName, items: ids });
+  }
+  S.inbox = S.inbox.filter(i => !ids.some(id => byId(id)?.videoId === i.videoId));
+  save.library(); save.queue(); save.playlists(); save.inbox();
+  renderEverything();
+  $('#imp').classList.add('hidden');
+  impItems = []; $('#impText').value = ''; $('#impInfo').textContent = ''; $('#impPreview').classList.add('hidden');
+  toast(`Imported: ${added} new song${added === 1 ? '' : 's'}, ${ids.length - added} already in library${$('#impPl').checked && plName ? ` · playlist "${plName}" saved` : ''}`, 'good');
+}
+
+function initImportUI() {
+  $('#libImportBtn').onclick = () => { $('#imp').classList.remove('hidden'); $('#impText').focus(); };
+  $('#impCancel').onclick = () => $('#imp').classList.add('hidden');
+  $('#impRead').onclick = readImport;
+  $('#impAdd').onclick = addImport;
+  $('#impFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (/\.(xlsx?|ods|docx?|pdf)$/i.test(f.name)) { toast('Save it as CSV or plain text first (File → Save as → CSV), then choose that file', 'bad'); return; }
+    $('#impText').value = await f.text();
+    readImport();
+  };
+  $('#impAll').onchange = e => $$('#impBody .imp-ck').forEach(c => { c.checked = e.target.checked; });
+  $('#impAllCreator').onchange = e => {
+    $$('#impBody tr').forEach(tr => { const sel = tr.querySelector('.imp-cr'); if (sel && tr.querySelector('.imp-ck').checked) sel.value = e.target.value; });
+  };
+}
+
 /* ---------------- playlists ---------------- */
 
 function renderPlaylists() {
@@ -1980,7 +2222,7 @@ function boot() {
   decks.A = new Deck('A', $('#mountA'));
   decks.B = new Deck('B', $('#mountB'));
   Tip.init();
-  initMixerUI(); initQueueUI(); initSmartUI(); initLibraryUI(); initCreatorsUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
+  initMixerUI(); initQueueUI(); initSmartUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab); });
   renderEverything(); syncXfUI(); applyVolumes();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));

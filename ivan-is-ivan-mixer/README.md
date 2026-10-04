@@ -25,6 +25,24 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 6. Press **VIEWER PAGE** (V). This is the page you share in StreamYard: the full video, nothing else but a small creator badge. Press **F** for full screen.
 7. After the show: **Play Log & Credits → Credits: this show → Copy** and paste it into the YouTube description.
 
+## Bring in your existing music list (Rundown console)
+
+1. Have your Rundown console ready in **one** of these ways:
+   - **The saved page itself**, e.g. `Rundown Console.html` in your Downloads. The mixer reads it directly. The page is only read as text: none of its scripts run.
+   - **Copy and paste:** open the Rundown Console in Chrome, press Ctrl+A, then Ctrl+C.
+   - **An export** as **CSV** or **text**. If it saves as Excel, open that in Excel and use *File → Save As → CSV*.
+   - If the saved page shows "No YouTube links found", the console keeps its list inside the browser rather than in the file. Use copy and paste instead.
+2. In the mixer: **Approved Library → 📥 Import list**.
+3. Press **Choose file…** and pick `Rundown Console.html` (or your CSV/text file), or paste the list (Ctrl+V) and press **Read list**.
+4. Check the preview:
+   - Every YouTube link is found. Lines without a link (talk breaks, headings) are skipped.
+   - Writers are matched by name. Fix any row with the drop-down, or use **Set creator for all checked**.
+   - Songs already in your library are kept as they are, never duplicated.
+5. Optional: tick **Add to the queue in this order**, and/or keep **Save as playlist** to keep the Rundown running order.
+6. Press **Add songs**. Song lengths, and any missing titles, fill in by themselves within a minute.
+
+It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | Song | https://www.youtube.com/watch?v=…`, and spreadsheet columns named Title/Song, Artist/Creator/Writer, Link/URL/YouTube, Notes and Permission.
+
 ## What it does
 
 **Decks A and B**

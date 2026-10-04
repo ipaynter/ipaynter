@@ -529,3 +529,13 @@ body.staged .stage-ctrl { display: flex; }
 .cr-air { position: relative; height: 8px; overflow: visible; }
 .cr-air i { border-radius: 3px; }
 .cr-air b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fff; }
+
+/* import list */
+.imp-box { max-width: 980px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; gap: 10px; }
+.imp-box h2 { margin: 0; color: var(--a); letter-spacing: 2px; font-size: 16px; }
+.imp-box p { margin: 0; font-size: 13px; }
+.imp-box textarea { margin: 0; }
+.imp-list { max-height: 45vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.imp-list td input:not([type=checkbox]), .imp-list td select { width: 100%; padding: 4px 6px; }
+.imp-list tr.dupe { opacity: .45; }
+.imp-list .link { font-family: var(--mono); font-size: 11px; color: var(--dim); }

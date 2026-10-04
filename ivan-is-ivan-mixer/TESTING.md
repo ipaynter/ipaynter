@@ -38,6 +38,15 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 3.3 Pick the writer from the list and click **Add to approved library**.
 - [ ] 3.4 Paste a link that is NOT in the library into Deck A and press LOAD. It must refuse and send you to the library.
 
+## 3b. Import your Rundown music list
+
+- [ ] 3b.1 **Approved Library → 📥 Import list → Choose file…** → pick `Downloads\Rundown Console.html`.
+- [ ] 3b.2 If it says *No YouTube links found*: open the Rundown Console in Chrome, press Ctrl+A then Ctrl+C, paste into the box, then press **Read list**.
+- [ ] 3b.3 The count of YouTube links found matches your list. Talk breaks and headings are skipped.
+- [ ] 3b.4 Each song shows the right writer. Fix any that are wrong with the drop-down.
+- [ ] 3b.5 Keep **Save as playlist**, then press **Add songs**. The songs appear in the library, and the playlist keeps the Rundown order.
+- [ ] 3b.6 Within a minute, lengths fill in. Any song marked ⚠ cannot play in the mixer because the owner blocks embedding.
+
 ## 4. One deck
 
 - [ ] 4.1 Click **A** on a library song. Deck A shows the title, writer and video.
@@ -125,7 +134,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 ---
 
-**Result:** ___ of 14 sections passed.  Date: ________
+**Result:** ___ of 15 sections passed.  Date: ________
 
 Failures (step number + what happened):
 
