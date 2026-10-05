@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.3.0 — 2026-10-05 — DJ board
-Commit: `pending`
+Commit: `54477ac`
 - **Videos on the decks:** each deck shows a silent copy of its video, kept in step with the Viewer tab. You can turn this off in Settings if the computer is slow.
 - **Sleeker decks:** video on the left; title, a big time-to-end, beat lights, BPM and status on the right.
 - **Beat monitor** in the mixer shows where A and B are in their 4-bar phrase (16 lights each), plus both tempos and a ✓ when they blend.
