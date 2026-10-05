@@ -7,6 +7,7 @@
 #   /api/load                mixer restores from the disk copy
 #   /api/channel?h=|c=       a creator's channel ID and profile picture
 #   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
+#   /api/playlist?list=<id>  the video IDs of a public or unlisted playlist, in order
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -212,6 +213,26 @@ try {
                 if ($ch -notmatch '^UC[\w-]{22}$') { Send-Json $res '{"error":"bad channel id"}' 400; continue }
                 try { $xml = Get-YouTube "https://www.youtube.com/feeds/videos.xml?channel_id=$ch" } catch { Send-Json $res '{"error":"Could not reach YouTube"}' 502; continue }
                 Send-Bytes $res ($utf8.GetBytes($xml)) 'application/xml'; continue
+            }
+
+            if ($path -eq '/api/playlist') {
+                $pl = "$($req.QueryString['list'])"
+                if ($pl -notmatch '^[\w-]{10,80}$') { Send-Json $res '{"error":"bad playlist id"}' 400; continue }
+                $ids = New-Object System.Collections.Generic.List[string]
+                try {
+                    $page = Get-YouTube "https://www.youtube.com/playlist?list=$pl"
+                    $pat = '"playlistVideoRenderer":\{"videoId":"([\w-]{11})"|"videoId":"([\w-]{11})","playlistId":"' + [regex]::Escape($pl) + '"'
+                    foreach ($m in [regex]::Matches($page, $pat)) {
+                        $v = if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }
+                        if (-not $ids.Contains($v)) { $ids.Add($v) }
+                    }
+                } catch {}
+                if ($ids.Count -eq 0) {
+                    try { $xml = Get-YouTube "https://www.youtube.com/feeds/videos.xml?playlist_id=$pl" } catch { Send-Json $res '{"error":"Could not reach YouTube"}' 502; continue }
+                    foreach ($m in [regex]::Matches($xml, '<yt:videoId>([\w-]{11})</yt:videoId>')) { if (-not $ids.Contains($m.Groups[1].Value)) { $ids.Add($m.Groups[1].Value) } }
+                }
+                $list = @($ids | Select-Object -First 300)
+                Send-Json $res ('{"ids":[' + (($list | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']}'); continue
             }
 
             if ($path -eq '/') { $path = '/index.html' }

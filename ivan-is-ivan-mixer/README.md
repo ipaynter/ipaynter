@@ -51,7 +51,10 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
 
 ## Adding music: just drag or paste the link
 
-- **Drag** a YouTube link (from the address bar, a YouTube page, your Rundown page…) over the mixer. A drop screen appears with three boxes: **DECK A · THE LIST · DECK B**. Let go on the one you want.
+- **A whole playlist:** paste a YouTube playlist link (`youtube.com/playlist?list=…`) and every song in it is added in order. Public or unlisted playlists only.
+- **Play next** (next to Add) puts what you paste in as the next song. **Add** or Enter puts it at the bottom.
+
+- **Drag** a YouTube link (from the address bar, a YouTube page, your Rundown page…) over the mixer. A drop screen appears with four boxes: **DECK A · Play NEXT · Bottom of THE LIST · DECK B**. Let go on the one you want.
 - **Ctrl+V** anywhere in the mixer adds a copied YouTube link to the bottom of the list. You can also paste into the box at the top of the list.
 - **Paste** into a deck's link box and press LOAD. It asks once, then adds and loads it.
 

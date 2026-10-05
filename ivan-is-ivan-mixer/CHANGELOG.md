@@ -18,6 +18,18 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.3.0 — 2026-10-05 — DJ board
+Commit: `pending`
+- **Videos on the decks:** each deck shows a silent copy of its video, kept in step with the Viewer tab. You can turn this off in Settings if the computer is slow.
+- **Sleeker decks:** video on the left; title, a big time-to-end, beat lights, BPM and status on the right.
+- **Beat monitor** in the mixer shows where A and B are in their 4-bar phrase (16 lights each), plus both tempos and a ✓ when they blend.
+- **Easier to add songs:**
+  - Paste a **YouTube playlist link** and the whole playlist is added in order.
+  - Paste many links at once.
+  - **Play next** beside Add puts the song in as the next one to play. **Add** (or Enter) puts it at the bottom.
+  - The drag-and-drop screen has a new **Play NEXT** box.
+- **Fixed:** list tags now update the moment a deck starts or stops. A finished song on a deck shows **✓ ON A**, not UP NEXT.
+
 ## v3.2.2 — 2026-10-04 — Your icon
 Commit: `f897034`
 - The desktop button now shows the **Ivan "i" icon** (`ivan-mixer.ico`). The button is refreshed on every click, so an existing button picks up the new icon.

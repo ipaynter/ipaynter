@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '3.2.2';
+const APP_VERSION = '3.3.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -99,7 +99,7 @@ const S = {
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
-    snapBars: true, smartFill: true, viewerTab: true, mode: 'assist'
+    snapBars: true, smartFill: true, viewerTab: true, deckVideo: true, mode: 'assist'
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
@@ -445,6 +445,44 @@ class Deck {
     });
   }
 
+  // Viewer-tab mode: a muted copy of the video on the deck, kept in step with the Viewer tab.
+  syncMirror() {
+    if (!S.cfg.viewerTab || !S.cfg.deckVideo) {
+      if (this.el.classList.contains('mirror-on')) { this.el.classList.remove('mirror-on'); this.mirror?.pauseVideo?.(); }
+      return;
+    }
+    if (!this.mirror) {
+      if (!window.YT?.Player || !this.r.remoteImg) return;
+      const host = document.createElement('div'); host.id = 'mirror' + this.id;
+      this.r.remoteImg.after(host);
+      this.mirror = new YT.Player(host.id, {
+        host: YT_HOST, width: '100%', height: '100%',
+        playerVars: { autoplay: 0, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, iv_load_policy: 3, playsinline: 1, origin: location.origin },
+        events: { onReady: e => { e.target.mute(); this.mirrorReady = true; this.mirrorVid = undefined; }, onError: () => { this.mirrorBad = true; } }
+      });
+      return;
+    }
+    if (!this.mirrorReady) return;
+    const m = this.mirror, vid = this.track?.videoId || null;
+    if (vid !== this.mirrorVid) {
+      this.mirrorVid = vid; this.mirrorBad = false;
+      if (vid) m.cueVideoById({ videoId: vid, startSeconds: this.time || this.cuePoint || 0 }); else m.stopVideo?.();
+      this.el.classList.remove('mirror-on');
+      return;
+    }
+    if (!vid || this.mirrorBad) { this.el.classList.remove('mirror-on'); return; }
+    const st = m.getPlayerState?.(), playing = this.isPlaying();
+    if (playing && st !== 1 && st !== 3) m.playVideo();
+    else if (!playing && (st === 1 || st === 3)) m.pauseVideo();
+    const now = performance.now();
+    if (now - (this.mirrorCheck || 0) > 2000) {
+      this.mirrorCheck = now;
+      const mt = m.getCurrentTime?.() || 0;
+      if (Math.abs(mt - this.time) > 1.2 && (playing || st === 2)) m.seekTo(this.time, true);
+    }
+    this.el.classList.toggle('mirror-on', st === 1 || st === 2);
+  }
+
   // After the Viewer tab (re)connects: carry on from where this song was.
   resume() {
     const midSong = this.played && !this.finished && this.time > 0;
@@ -648,7 +686,9 @@ class Deck {
   /* --- player events --- */
 
   onState(s) {
+    const was = this.ytState;
     this.ytState = s;
+    if ((was === 1) !== (s === 1)) setTimeout(renderQueue, 0); // list tags (▶ ON A …) follow play / stop
     if (s === 1) {
       const d = this.player.getDuration();
       if (d > 0) this.setDur(d);
@@ -728,6 +768,7 @@ class Deck {
       this.thumbVid = t?.videoId || null;
       if (r.remoteImg) r.remoteImg.src = this.thumbVid ? thumb(this.thumbVid).replace('mqdefault', 'hqdefault') : '';
     }
+    this.syncMirror();
     const playing = this.isPlaying();
     const st = !t ? 'EMPTY' : this.errored ? 'ERROR' : playing ? 'PLAYING' : this.finished ? 'ENDED' : this.ytState === 2 ? 'PAUSED' : 'CUED';
     r.state.textContent = st; r.state.dataset.s = st;
@@ -1679,6 +1720,7 @@ function renderQueue() {
     const deck = onA ? decks.A : onB ? decks.B : null;
     let st = '', tag = '';
     if (deck && deck.isPlaying()) { st = 'live'; tag = `▶ ON ${deck.id}`; }
+    else if (deck && deck.played) { st = 'played'; tag = `✓ ON ${deck.id}`; }
     else if (deck) { st = 'cued'; tag = deck === other(liveDeck()) || !liveDeck().isPlaying() ? 'UP NEXT' : `ON ${deck.id}`; }
     else if (t.flag) { st = 'flag'; tag = '⚠ blocked'; }
     else if (played.has(t.videoId)) { st = 'played'; tag = '✓ played'; }
@@ -1754,13 +1796,14 @@ function initQueueUI() {
     S.library.splice(at, 0, t);
     save.library(); renderQueue();
   });
-  $('#quickAdd').addEventListener('submit', e => {
-    e.preventDefault();
+  const quick = place => {
     const v = $('#quickUrl').value.trim();
-    if (!v) return;
-    if (ingestLinks(v).length) $('#quickUrl').value = '';
+    if (!v) { $('#quickUrl').focus(); return; }
+    ingestLinks(v, place); $('#quickUrl').value = '';
     renderQueue();
-  });
+  };
+  $('#quickAdd').addEventListener('submit', e => { e.preventDefault(); quick('end'); });
+  $('#quickNext').onclick = () => quick('next');
   $('#lineupBtn').onclick = lineup;
   $('#lineupUndo').onclick = undoLineup;
 }
@@ -1928,13 +1971,27 @@ function droppedText(e) {
 }
 
 // Turns any text with YouTube links into library tracks (adding the new ones: you vouch for what you drop in).
-function ingestLinks(text) {
-  const vids = [];
-  for (const u of ytUrls(String(text || '').replace(/&amp;/g, '&'))) {
-    const v = parseVideoId(u.replace(/[).\]]+$/, ''));
+// A playlist link (no single video in it): youtube.com/playlist?list=…
+function playlistIdOf(u) {
+  try {
+    const x = new URL(u);
+    const l = x.searchParams.get('list');
+    return l && /^[\w-]{10,80}$/.test(l) && !x.searchParams.get('v') && !/youtu\.be$/.test(x.hostname) ? l : null;
+  } catch { return null; }
+}
+
+// Adds links to the list. place: 'end' (bottom) or 'next' (plays next).
+function ingestLinks(text, place = 'end') {
+  const vids = [], lists = [];
+  for (const raw of ytUrls(String(text || '').replace(/&amp;/g, '&'))) {
+    const u = raw.replace(/[).\]]+$/, '');
+    const pl = playlistIdOf(u);
+    if (pl) { if (!lists.includes(pl)) lists.push(pl); continue; }
+    const v = parseVideoId(u);
     if (v && !vids.includes(v)) vids.push(v);
   }
-  if (!vids.length) { toast('No YouTube link found in what you dropped or pasted', 'bad'); return []; }
+  lists.forEach(l => addPlaylist(l, place));
+  if (!vids.length) { if (!lists.length) toast('No YouTube link found in what you dropped or pasted', 'bad'); return []; }
   let added = 0;
   const tracks = vids.map(vid => {
     let t = byVid(vid);
@@ -1947,9 +2004,30 @@ function ingestLinks(text) {
     return t;
   });
   S.inbox = S.inbox.filter(i => !vids.includes(i.videoId));
+  if (place === 'next') {
+    const set = new Set(tracks);
+    S.library = S.library.filter(t => !set.has(t));
+    const n = nextInList();
+    S.library.splice(n ? S.library.indexOf(n) : S.library.length, 0, ...tracks);
+  }
   save.library(); save.inbox(); renderLibrary(); renderInbox(); renderCreators();
-  toast(added ? `Added ${added} song${added === 1 ? '' : 's'} to the bottom of the list` : `Already in the list`, 'good');
+  const what = tracks.length === 1 ? `"${tracks[0].title || 'song'}"` : `${tracks.length} songs`;
+  toast(place === 'next' ? `${what} — plays next` : added ? `Added ${added} song${added === 1 ? '' : 's'} to the bottom of the list` : `Already in the list`, 'good');
   return tracks;
+}
+
+// A whole playlist in one go (your writers' playlists, or one you make on YouTube).
+async function addPlaylist(list, place = 'end') {
+  toast('Reading the playlist…');
+  try {
+    const r = await fetch('/api/playlist?list=' + encodeURIComponent(list), { cache: 'no-store' });
+    const j = await r.json();
+    if (!j.ids?.length) throw new Error(j.error || 'empty');
+    ingestLinks(j.ids.map(v => 'https://youtu.be/' + v).join(' '), place);
+    renderQueue();
+  } catch {
+    toast('Could not read that playlist. It must be public or unlisted, and the mixer must be started with its start button.', 'bad');
+  }
 }
 
 // Title, creator and length for a link added by drag or paste.
@@ -1991,9 +2069,9 @@ document.addEventListener('drop', e => {
   clearTimeout(dzTimer); showDropZone(false);
   const deckEl = e.target.closest?.('.deck');
   const where = e.target.closest?.('.dz')?.dataset.dz || (deckEl ? (deckEl.classList.contains('deck-a') ? 'A' : 'B') : 'Q');
-  const tracks = ingestLinks(droppedText(e));
+  const tracks = ingestLinks(droppedText(e), where === 'N' ? 'next' : 'end');
   if (!tracks.length) return;
-  if (where !== 'Q') decks[where].userLoad(tracks[0]);
+  if (where === 'A' || where === 'B') decks[where].userLoad(tracks[0]);
   renderQueue();
 });
 
@@ -2344,6 +2422,8 @@ function initSettingsUI() {
   $('#warnSec').onchange = e => { S.cfg.warnSec = clamp(+e.target.value || 30, 5, 120); save.cfg(); };
   $('#deadAirMode').onchange = e => { S.cfg.deadAirMode = e.target.value; save.cfg(); };
   $('#approvedOnly').onchange = e => { S.cfg.approvedOnly = e.target.checked; save.cfg(); };
+  $('#deckVideo').checked = S.cfg.deckVideo !== false;
+  $('#deckVideo').onchange = e => { S.cfg.deckVideo = e.target.checked; save.cfg(); };
   $('#viewerTabMode').checked = S.cfg.viewerTab;
   $('#viewerTabMode').onchange = async e => {
     if (decks.A.isPlaying() || decks.B.isPlaying()) { e.target.checked = S.cfg.viewerTab; toast('Stop the music first, then change this', 'bad'); return; }
@@ -2373,6 +2453,17 @@ function renderMeters() {
 }
 
 function renderBpmMatch() {
+  // beat monitor: where each deck is in its 4-bar phrase (16 lights)
+  for (const d of [decks.A, decks.B]) {
+    const row = $('#bmCells' + d.id); if (!row) continue;
+    if (!row.children.length) row.innerHTML = '<i></i>'.repeat(16);
+    const b = d.isPlaying() ? d.beat() : null;
+    const idx = b ? (((b.bar - 1) % 4 + 4) % 4) * 4 + b.inBar : -1;
+    const sig = idx + (b && b.frac < 0.35 ? '*' : '');
+    if (row.dataset.sig === sig) continue;
+    row.dataset.sig = sig;
+    [...row.children].forEach((c, i) => { c.className = i === idx ? (b.frac < 0.35 ? 'on hit' : 'on') : i < idx ? 'past' : ''; });
+  }
   const a = decks.A.track?.bpm, b = decks.B.track?.bpm;
   $('#bmA').textContent = a ? a.toFixed(1) : '—';
   $('#bmB').textContent = b ? b.toFixed(1) : '—';
@@ -2381,7 +2472,7 @@ function renderBpmMatch() {
     const d = Math.min(...[1, 2, 0.5].map(k => Math.abs(b * k - a) / a * 100));
     el.textContent = d <= 4 ? `Δ ${d.toFixed(1)}% ✓ MIX` : `Δ ${d.toFixed(1)}%`;
     el.className = 'bm-d ' + (d <= 4 ? 'good' : d <= 8 ? 'ok' : 'bad');
-  } else { el.textContent = 'TEMPO'; el.className = 'bm-d'; }
+  } else { el.textContent = a || b ? 'tap the other deck' : 'tap ⋯ › tap to set tempo'; el.className = 'bm-d'; }
 }
 
 function initMixerUI() {

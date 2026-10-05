@@ -9,6 +9,7 @@ Serves the mixer on http://localhost:8765 (this computer only) and:
   /api/load                mixer restores from the disk copy
   /api/channel?h=|c=       a creator's channel ID and profile picture
   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
+  /api/playlist?list=<id>  the video IDs of a public or unlisted playlist, in order
 """
 import datetime
 import glob
@@ -177,6 +178,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 return self.send_json({"error": "Could not reach YouTube"}, 502)
             return self.send_body(xml, "application/xml")
+        if path == "/api/playlist":
+            pl = q.get("list", [""])[0]
+            if not re.match(r"^[\w-]{10,80}$", pl):
+                return self.send_json({"error": "bad playlist id"}, 400)
+            ids = []
+            try:
+                page = youtube_get(f"https://www.youtube.com/playlist?list={pl}").decode("utf-8", "replace")
+                pat = r'"playlistVideoRenderer":\{"videoId":"([\w-]{11})"|"videoId":"([\w-]{11})","playlistId":"' + re.escape(pl) + '"'
+                for m in re.finditer(pat, page):
+                    v = m.group(1) or m.group(2)
+                    if v not in ids:
+                        ids.append(v)
+            except Exception:
+                pass
+            if not ids:  # fall back to the public feed (latest 15)
+                try:
+                    xml = youtube_get(f"https://www.youtube.com/feeds/videos.xml?playlist_id={pl}").decode("utf-8", "replace")
+                    for v in re.findall(r"<yt:videoId>([\w-]{11})</yt:videoId>", xml):
+                        if v not in ids:
+                            ids.append(v)
+                except Exception:
+                    return self.send_json({"error": "Could not reach YouTube"}, 502)
+            return self.send_json({"ids": ids[:300]})
         if (path.startswith("/api/") or path.startswith("/data/")
                 or path.endswith((".py", ".ps1", ".bat", ".sh", ".txt"))):
             return self.send_error(404)

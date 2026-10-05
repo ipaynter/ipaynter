@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="icon.png">
 <title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=3.2.2">
+<link rel="stylesheet" href="styles.css?v=3.3.0">
 </head>
 <body>
 
@@ -51,6 +51,11 @@
       <button type="button" data-mode="auto" data-cmd="modeAuto" title="AUTO: runs the show down the list, and keeps going with fair picks when the list ends. Press Manual to take over.">Auto</button>
     </div>
     <button id="mixNow" class="btn playnext" type="button" data-cmd="mix" title="Play the cued song now: it fades in over the fade time and the old one stops (Space)">▶ Play next</button>
+    <div class="beatmon" title="Beat monitor: where each deck is in its 4-bar phrase, and the tempo of each. Matching lights and a ✓ = a smooth blend.">
+      <div class="bm-row bm-ra"><b>A</b><span class="cells" id="bmCellsA"></span><em id="bmA">—</em></div>
+      <div class="bm-row bm-rb"><b>B</b><span class="cells" id="bmCellsB"></span><em id="bmB">—</em></div>
+      <div id="bmDelta" class="bm-d">tempo</div>
+    </div>
     <div class="xf">
       <b class="xa">A</b>
       <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader" data-cmd="xfRight" title="Crossfader: left plays A, right plays B">
@@ -78,7 +83,6 @@
         <input type="range" id="voiceThresh" min="5" max="90" value="35" title="Voice trigger level">
       </div>
       <label class="check" title="When tempo and downbeat are set, mixes start on the bar"><input type="checkbox" id="snapBars"> mix on the bar</label>
-      <div class="bpm-match" id="bpmMatch" title="Tempo of each deck. Within about 4% blends smoothly."><span>A <b id="bmA">—</b></span><span id="bmDelta" class="bm-d">tempo</span><span><b id="bmB">—</b> B</span></div>
       <div class="xf-snap">
         <button type="button" data-xf="0" data-cmd="xfA">◀ A</button>
         <button type="button" data-xf="0.5" data-cmd="xfCenter">mid</button>
@@ -97,8 +101,9 @@
     <h2>The list <span id="queueCount" class="count">0</span></h2>
     <span class="hint-mini">click a song to cue it · ▶ Play next</span>
     <form id="quickAdd" class="quick-add" autocomplete="off">
-      <input id="quickUrl" placeholder="Paste a YouTube link and press Enter (or drag one in)" title="Adds the song to the bottom of the list. Title, writer and length fill in by themselves.">
-      <button type="submit" class="primary">Add</button>
+      <input id="quickUrl" placeholder="Paste YouTube links or a playlist link — Enter adds them" title="Paste one link, many links, or a whole YouTube playlist link. Title, writer and length fill in by themselves.">
+      <button type="submit" class="primary" title="Add to the bottom of the list (Enter)">Add</button>
+      <button type="button" id="quickNext" title="Add it so it plays NEXT">Play next</button>
     </form>
     <input id="libSearch" placeholder="Find…" class="find" title="Filter the list">
     <button type="button" id="lineupBtn" data-cmd="smart" title="Line-up assistant: arranges the songs still to play, keeping writers fair (you 40%, others 20%), tempo and energy flowing. One click, and Undo puts it back.">✨ Line-up</button>
@@ -171,6 +176,7 @@
           </select></label>
         <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play songs from your list)</label>
         <label class="check" title="ON (recommended): music and video play in a separate Viewer tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Viewer tab</b> (share that tab in StreamYard)</label>
+        <label class="check" title="Shows a silent copy of each video on its deck, in step with the Viewer tab. Untick on a slow computer or connection."><input type="checkbox" id="deckVideo" checked> Show the videos on the decks</label>
       </div>
       <div class="card">
         <h3>About this version</h3>
@@ -279,15 +285,21 @@
 <template id="deckTpl">
   <section class="deck">
     <div class="dk-top">
-      <span class="deck-letter" data-r="letter"></span>
-      <div class="screen dk-art" data-r="screen"><div class="player-host"><div data-r="player"></div></div></div>
-      <div class="deck-title">
-        <div class="t-title" data-r="title"></div>
-        <div class="t-artist" data-r="artist"></div>
-      </div>
-      <div class="dk-time" title="Time to the end of the song. Yellow 30 s, red 10 s.">
-        <b data-r="remain">-0:00</b>
-        <small><span data-r="elapsed">0:00</span> / <span data-r="length">0:00</span></small>
+      <div class="screen dk-art" data-r="screen"><div class="player-host"><div data-r="player"></div></div><span class="deck-letter" data-r="letter"></span></div>
+      <div class="dk-info">
+        <div class="deck-title">
+          <div class="t-title" data-r="title"></div>
+          <div class="t-artist" data-r="artist"></div>
+        </div>
+        <div class="dk-time" title="Time to the end of the song. Yellow 30 s, red 10 s.">
+          <b data-r="remain">-0:00</b>
+          <small><span data-r="elapsed">0:00</span> / <span data-r="length">0:00</span></small>
+        </div>
+        <div class="dk-beat">
+          <span class="beat-lights" data-r="lights" title="Beat counter (after tap + grid)"><i></i><i></i><i></i><i></i></span>
+          <span class="bpm" data-r="bpm" title="Tempo">—</span>
+          <span class="deck-state" data-r="state">EMPTY</span>
+        </div>
       </div>
     </div>
     <div class="progress" data-r="progress" title="Click to jump">
@@ -298,11 +310,7 @@
     <div class="dk-ctrl">
       <button type="button" class="btn play" data-a="play" data-r="playBtn" title="Play / pause">▶</button>
       <button type="button" class="btn cue" data-a="cue" title="CUE: paused = set cue point; playing = back to cue and pause">cue</button>
-      <span class="deck-state" data-r="state">EMPTY</span>
       <span class="mixout" data-r="mixout"></span>
-      <span class="spacer"></span>
-      <span class="beat-lights" data-r="lights" title="Beat counter (after tap + grid)"><i></i><i></i><i></i><i></i></span>
-      <span class="bpm" data-r="bpm" title="Tempo">—</span>
       <button type="button" data-a="more" class="more-btn" title="Seek, tempo, hot cues, loops, trim">⋯</button>
     </div>
     <div class="dk-more hidden" data-r="more">
@@ -348,14 +356,17 @@
 <!-- Appears while a YouTube link is dragged over the mixer: drop it on a box. -->
 <div id="dropZone" class="dropzone hidden" aria-hidden="true">
   <div class="dz dz-a" data-dz="A"><span>⬇</span>Load on<b>DECK A</b></div>
-  <div class="dz dz-q" data-dz="Q"><span>⬇</span>Add to<b>THE LIST</b></div>
+  <div class="dz-mid">
+    <div class="dz dz-n" data-dz="N"><span>⬇</span>Play<b>NEXT</b></div>
+    <div class="dz dz-q" data-dz="Q"><span>⬇</span>Bottom of<b>THE LIST</b></div>
+  </div>
   <div class="dz dz-b" data-dz="B"><span>⬇</span>Load on<b>DECK B</b></div>
   <div class="dz-hint">Drop the YouTube link on a box</div>
 </div>
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=3.2.2"></script>
+<script src="app.js?v=3.3.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
