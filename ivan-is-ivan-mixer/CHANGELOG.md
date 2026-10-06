@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v3.4.0 — 2026-10-06 — Mad World Studios start button
-Commit: `pending`
+Commit: `93d033c`
 - New **`Mad World Studios.bat`**, the one start button. Each click:
   - checks GitHub for a newer mixer, downloads it and installs it;
   - with no internet, uses the newest mixer zip in Downloads, if that is newer;
