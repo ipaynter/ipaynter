@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '3.4.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';

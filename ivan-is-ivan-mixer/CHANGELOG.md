@@ -18,6 +18,16 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.4.0 — 2026-10-06 — Mad World Studios start button
+Commit: `pending`
+- New **`Mad World Studios.bat`**, the one start button. Each click:
+  - checks GitHub for a newer mixer, downloads it and installs it;
+  - with no internet, uses the newest mixer zip in Downloads, if that is newer;
+  - keeps your songs (`data` folder) and Stream Deck key;
+  - starts the mixer.
+- It puts a **Mad World Studios** button on the desktop, with its own clearly marked icon (`mad-world-studios.ico`). It replaces the old "Ivan is Ivan Mixer" button.
+- Tested: fresh install from GitHub, already up to date, a newer zip in Downloads, and no internet.
+
 ## v3.3.0 — 2026-10-05 — DJ board
 Commit: `54477ac`
 - **Videos on the decks:** each deck shows a silent copy of its video, kept in step with the Viewer tab. You can turn this off in Settings if the computer is slow.

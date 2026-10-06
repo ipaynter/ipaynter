@@ -5,13 +5,13 @@ Runs on your own computer in Google Chrome. You don't need an account, you don't
 
 **Version:** see the `VERSION` file, the top bar of the mixer, and `CHANGELOG.md` for what changed in each release.
 
-## Easiest: the desktop button
+## Easiest: the Mad World Studios button
 
-1. Put `Ivan Mixer.bat` and the mixer zip in your **Downloads** folder.
-2. Double-click `Ivan Mixer.bat`. It installs the mixer into `C:\Users\<you>\IvanIsIvanMixer`, makes an **"Ivan is Ivan Mixer"** desktop button, and starts it.
-3. After that, just click the desktop button.
+1. Double-click **`Mad World Studios.bat`** once, from wherever you saved it.
+2. It installs the mixer into `C:\Users\<you>\IvanIsIvanMixer`, puts a **Mad World Studios** button on the desktop, and starts the mixer.
+3. From then on, just click the **Mad World Studios** button.
 
-**To update:** download the new zip into Downloads and click the button. Your songs and Stream Deck key are kept.
+**Updates are automatic.** Every click checks GitHub (`ipaynter/ipaynter`) for a newer version and installs it first. Your songs and Stream Deck key are kept. With no internet, it starts the version you have, or installs a newer `ivan-is-ivan-mixer-vX.Y.Z.zip` from Downloads if there is one.
 
 ## Start it
 
