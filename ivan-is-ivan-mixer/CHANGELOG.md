@@ -18,6 +18,10 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v3.4.1 — 2026-10-06 — Fix: see updates straight away
+Commit: `pending`
+- The start button asks GitHub past its cache, so a new version is picked up straight away instead of after about 5 minutes.
+
 ## v3.4.0 — 2026-10-06 — Mad World Studios start button
 Commit: `93d033c`
 - New **`Mad World Studios.bat`**, the one start button. Each click:

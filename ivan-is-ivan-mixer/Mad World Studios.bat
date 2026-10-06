@@ -59,7 +59,7 @@ if ($have -gt [version]'0.0.0') { Write-Host "  Installed: v$have" } else { Writ
 # 1) GitHub
 $latest = $null
 try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Uri "https://raw.githubusercontent.com/$Repo/$Branch/$Sub/VERSION"
+    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Headers @{ 'Cache-Control' = 'no-cache' } -Uri "https://raw.githubusercontent.com/$Repo/$Branch/$Sub/VERSION?t=$([DateTime]::UtcNow.Ticks)"
     $c = $r.Content; if ($c -is [byte[]]) { $c = [Text.Encoding]::UTF8.GetString($c) }
     $latest = Ver $c
     Write-Host "  Latest:    v$latest"
