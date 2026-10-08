@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v4.0.0 — 2026-10-08 — Late Night with Ivan
-Commit: `pending`
+Commit: `bd7db4e`
 - **New name:** *Late Night with Ivan — DJ Board*, by Mad World Studios. The viewer page is now called the **Share tab**, the tab you share in StreamYard.
 - **Overlays:** pictures and short videos over the music on the Share tab.
   - Drag them in from your computer or the web, or paste a screenshot.
