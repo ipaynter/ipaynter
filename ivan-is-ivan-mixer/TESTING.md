@@ -1,4 +1,4 @@
-# Verification test — Ivan is Ivan Live Mixer
+# Verification test — Late Night with Ivan (DJ Board)
 
 Version tested: v________ (from the top bar)
 
@@ -7,24 +7,22 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 ---
 
-## 0. Download and check the file
+## 0. Install
 
-- [ ] 0.1 Download `ivan-is-ivan-mixer.zip`.
-- [ ] 0.2 Check that the file is the one that was built. In PowerShell:
-  `Get-FileHash .\ivan-is-ivan-mixer.zip -Algorithm SHA256`
-  The hash must match the one you were given.
-- [ ] 0.3 Right-click the zip → **Properties** → tick **Unblock** → OK. This stops Windows from blocking the start script.
-- [ ] 0.4 Extract the zip to a folder you will keep, for example `Documents\ivan-is-ivan-mixer`. Don't run the mixer from inside the zip.
+- [ ] 0.1 Download `late-night-with-ivan-v4.0.0.zip` into Downloads. In PowerShell, `Get-FileHash <zip> -Algorithm SHA256` matches the fingerprint you were given.
+- [ ] 0.2 Right-click the zip → **Extract All**. Double-click **Mad World Studios** in the folder that opens. If you see "Windows protected your PC": **More info → Run anyway**.
+- [ ] 0.3 The black window says **Installed v4.0.0**. If you had an older version, it also says it brought over your songs and moved old items to the Recycle Bin.
+- [ ] 0.4 The desktop has a **MAD WORLD STUDIOS** button with the red-and-black icon. The old "Ivan is Ivan Mixer" button is gone.
+- [ ] 0.5 The Recycle Bin holds the old version (`IvanIsIvanMixer`), old zips and the old start button.
+- [ ] 0.6 `C:\Users\<you>\LateNightWithIvan\data` has `mixer-data.json` and a `versions` folder.
 
 ## 1. Start
 
-- [ ] 1.1 Double-click `start-windows.bat`. A black window opens and Chrome opens the mixer.
-  - If Windows SmartScreen appears: **More info → Run anyway**.
-  - If Windows Firewall asks: choose **Cancel / don't allow**. The mixer only talks to your own computer and doesn't need network access.
-- [ ] 1.2 Click **POWER ON**. The quick-start guide appears. Close it.
-- [ ] 1.3 The top right shows **YouTube: ready**, **Stream Deck: ready** and **Disk: saved ✓** in green.
-- [ ] 1.4 Hover over any button. A help box appears after a moment.
-- [ ] 1.5 The top bar shows the version (for example **v2.5.0**). It matches the zip file name and **Settings → About this version**.
+- [ ] 1.1 Chrome opens the board. The top bar says **LATE NIGHT with IVAN v4.0.0**.
+- [ ] 1.2 Click **Power on**. The **Share tab** opens. Click it once.
+- [ ] 1.3 The top right shows **Share tab: connected ✓**, **Disk: saved ✓**, **Stream Deck: ready** and **YouTube: ready**.
+- [ ] 1.4 Your songs from before are all in the list.
+- [ ] 1.5 Close everything. Click the desktop button again. It starts straight away, with no install.
 
 ## 2. Writers
 
@@ -91,14 +89,23 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 7.2 Tick **Voice auto-duck** and allow the mic. Speak, and the music dips. Stop, and it returns after about 1 second.
 - [ ] 7.3 If it dips with nobody talking, raise the trigger slider next to the mic meter.
 
-## 8. Viewer tab
+## 8. Share tab
 
-- [ ] 8.1 After POWER ON a second tab, **"Ivan is Ivan — VIEWER (share this tab)"**, opens by itself. If Chrome blocks it, allow pop-ups for localhost:8765 and click **VIEWER TAB**.
-- [ ] 8.2 Click it once. The mixer's top-bar light turns **Viewer tab: connected ✓**.
-- [ ] 8.3 Play a song from the mixer. You hear it, and the full video shows **in the Viewer tab** with the creator badge. The mixer tab stays fully visible.
-- [ ] 8.4 Press **F** in the Viewer tab: full screen. Press **F** again to leave full screen.
+- [ ] 8.1 After POWER ON a second tab, **"Late Night with Ivan — SHARE (StreamYard)"**, opens by itself. If Chrome blocks it, allow pop-ups for localhost:8765 and click **VIEWER TAB**.
+- [ ] 8.2 Click it once. The mixer's top-bar light turns **Share tab: connected ✓**.
+- [ ] 8.3 Play a song from the mixer. You hear it, and the full video shows **in the Share tab** with the creator badge. The mixer tab stays fully visible.
+- [ ] 8.4 Press **F** in the Share tab: full screen. Press **F** again to leave full screen.
 - [ ] 8.5 During a mix, the video fades to the next song and the badge slides in with the new creator.
-- [ ] 8.6 Close the Viewer tab while a song plays. The mixer warns you and the light shows **NOT OPEN**. Click the light, then click the new tab once. The song continues where it was.
+- [ ] 8.6 Close the Share tab while a song plays. The mixer warns you and the light shows **NOT OPEN**. Click the light, then click the new tab once. The song continues where it was.
+
+## 8a. Overlays
+
+- [ ] 8a.1 Drag a picture from your computer onto the board. The drop screen shows **OVERLAY**. The picture appears in the **Overlays** strip.
+- [ ] 8a.2 Drag in a short MP4 clip, and paste a picture link into *picture / video link…*. Both appear in the strip.
+- [ ] 8a.3 Pick **Big** and **5 s**, then click the picture. It shows on the Share tab over the video, and goes away after 5 seconds.
+- [ ] 8a.4 Pick **Corner**, then click the clip. It plays in the corner and goes away when it ends. With **sound** ticked you hear it.
+- [ ] 8a.5 Pick **until I click**, then show a picture. **Hide ✕** takes it off.
+- [ ] 8a.6 Close and reopen the board. The overlays are still there.
 
 ## 8b. Overriding Smart DJ
 
@@ -112,7 +119,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 ## 9. StreamYard (private broadcast)
 
 - [ ] 9.1 StreamYard: set your XLR mic as normal.
-- [ ] 9.2 **Share screen → Chrome Tab → "Ivan is Ivan — VIEWER (share this tab)"**, and tick **Also share tab audio**.
+- [ ] 9.2 **Share screen → Chrome Tab → "Late Night with Ivan — SHARE (StreamYard)"**, and tick **Also share tab audio**.
 - [ ] 9.3 Put the share on stage. Viewers see the full video with the creator badge.
 - [ ] 9.4 Start a **private / unlisted** test broadcast. Talk over music using TALK.
 - [ ] 9.5 Watch the recording afterwards:
@@ -124,17 +131,22 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 10.1 Mixer **Settings & Stream Deck** tab: click **Copy** next to "Play / pause Deck A".
 - [ ] 10.2 Stream Deck app: drag **Website** onto a key, paste the URL, tick **GET request in background**.
 - [ ] 10.3 Click into StreamYard so the mixer is in the background, then press the key. Deck A plays or pauses.
-- [ ] 10.4 Repeat for Play next, Auto DJ, TALK, Viewer page, Full screen and Fade all out.
+- [ ] 10.4 Repeat for Play next, Auto DJ, TALK, ov1 (overlay), Full screen and Fade all out.
 
 ## 11. After the show
 
 - [ ] 11.1 **Play Log & Credits → Credits: this show → Copy credits**.
 - [ ] 11.2 Paste into Notepad. Check every song, writer and channel link is right.
 
+## 11b. Updating
+
+- [ ] 11b.1 Put a newer zip in Downloads (any `late-night-with-ivan-vX.Y.Z.zip`). Click the desktop button.
+- [ ] 11b.2 The black window says **Installed vX.Y.Z**. The old version and the older zip are in the Recycle Bin. Your songs and overlays are still there.
+
 ## 12. Data is safe
 
-- [ ] 12.1 Close Chrome and close the black window. Start again with `start-windows.bat`. Everything is still there.
-- [ ] 12.2 The app folder now has `data\mixer-data.json` and a `backup-<date>.json`.
+- [ ] 12.1 Close Chrome and close the black window. Start again with the desktop button. Everything is still there.
+- [ ] 12.2 `LateNightWithIvan\data` has `mixer-data.json` and a `backup-<date>.json`.
 - [ ] 12.3 **Settings → Export backup** downloads a `.json` file. Keep it somewhere safe.
 
 ## 13. Safety

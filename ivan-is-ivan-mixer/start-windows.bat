@@ -1,17 +1,17 @@
 @echo off
 setlocal
-title Ivan is Ivan - Live Mixer
+title Late Night with Ivan - DJ Board
 cd /d "%~dp0"
 set "APPDIR=%~dp0"
 set "LOG=%~dp0start-log.txt"
 
 echo.
-echo   IVAN is IVAN - Live Mixer
+echo   LATE NIGHT with IVAN - DJ Board
 echo   =========================
 echo   Folder: %APPDIR%
 echo.
 
-> "%LOG%" echo Ivan is Ivan - Live Mixer - start log - %DATE% %TIME%
+> "%LOG%" echo Late Night with Ivan - DJ Board - start log - %DATE% %TIME%
 >>"%LOG%" ver
 >>"%LOG%" echo Folder: %APPDIR%
 if exist "%APPDIR%VERSION" for /f "usebackq delims=" %%v in ("%APPDIR%VERSION") do >>"%LOG%" echo Version: %%v

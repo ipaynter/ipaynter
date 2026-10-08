@@ -1,0 +1,28 @@
+LATE NIGHT WITH IVAN - DJ BOARD
+Mad World Studios
+
+FIRST TIME (and every update)
+  1. Right-click the zip  >  Extract All  >  Extract.
+  2. In the folder that opens, double-click  "Mad World Studios".
+     If a blue box says "Windows protected your PC":
+     click "More info", then "Run anyway". (Only the first time.)
+  3. It installs, puts a MAD WORLD STUDIOS button on your desktop,
+     and opens the DJ board in Chrome.
+
+EVERY SHOW
+  1. Click the MAD WORLD STUDIOS button on the desktop.
+  2. Click POWER ON. The SHARE tab opens - click it once.
+  3. In StreamYard: Share screen > Chrome Tab > "Late Night with Ivan - SHARE"
+     and tick "Also share tab audio".
+  4. Keep the black window open during the show.
+
+UPDATES
+  Download the new zip into Downloads, then click the desktop button.
+  It installs the new version by itself. Old versions go to the
+  Recycle Bin. Your songs, overlays and Stream Deck keys are kept.
+
+YOUR SONGS ARE SAFE
+  C:\Users\<you>\LateNightWithIvan\data
+    mixer-data.json   your songs and settings
+    versions\         a copy saved before every update
+    overlays\         your pictures and clips

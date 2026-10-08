@@ -1,4 +1,4 @@
-/* Ivan is Ivan — Live Mixer (v2)
+/* Late Night with Ivan — DJ Board
  * Two-deck YouTube mixer for live shows. Runs locally in Chrome.
  * No tracking, no accounts. Data lives in this browser and in the app's data folder.
  */
@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '3.4.1';
+const APP_VERSION = '4.0.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -96,15 +96,17 @@ const S = {
   creators: store.get('iii.creators', []),   // [{id, name, channelId, color}]
   inbox: store.get('iii.inbox', []),         // new uploads waiting for approval
   ignored: store.get('iii.ignored', []),     // video IDs dismissed from the inbox
+  overlays: store.get('iii.overlays', []),   // pictures / short videos for the share page [{id, kind, src, name}]
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
-    snapBars: true, smartFill: true, viewerTab: true, deckVideo: true, mode: 'assist'
+    snapBars: true, smartFill: true, viewerTab: true, deckVideo: true, mode: 'assist',
+    ovPos: 'big', ovSecs: 10, ovSound: false
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
   talk: false, voiceTalk: false,
-  autoDJ: false, onAir: false, onAirAt: 0, stage: false,
+  autoDJ: false, onAir: false, onAirAt: 0, stage: false, ovOn: null,
   transitioning: false, mixTarget: null, deadSince: 0, ytReady: false,
   creditsMode: 'show', smartSeed: 7,
   skip: new Set(),    // songs you said 'Not now' to this show
@@ -116,7 +118,7 @@ Object.defineProperty(S, 'autoDJ', { get: () => S.cfg.mode !== 'manual', set: ()
 
 const KEYS = {
   library: 'iii.library', queue: 'iii.queue', playlists: 'iii.playlists', history: 'iii.history',
-  creators: 'iii.creators', inbox: 'iii.inbox', ignored: 'iii.ignored', cfg: 'iii.settings'
+  creators: 'iii.creators', inbox: 'iii.inbox', ignored: 'iii.ignored', cfg: 'iii.settings', overlays: 'iii.overlays'
 };
 const save = {};
 Object.entries(KEYS).forEach(([name, key]) => { save[name] = () => store.set(key, S[name]); });
@@ -261,7 +263,7 @@ function stepTweens() {
 }
 setInterval(stepTweens, 30);
 
-/* ---------------- Viewer tab link: the YouTube players live in a separate tab you share in StreamYard ---------------- */
+/* ---------------- Share tab link: the YouTube players live in a separate tab you share in StreamYard ---------------- */
 
 const Bus = {
   ch: ('BroadcastChannel' in window) ? new BroadcastChannel('iii-mixer') : null,
@@ -269,7 +271,7 @@ const Bus = {
   send(m) { try { this.ch?.postMessage(m); } catch { /* closed */ } }
 };
 
-// Stands in for a YouTube player: sends commands to the Viewer tab, keeps the latest reported state.
+// Stands in for a YouTube player: sends commands to the Share tab, keeps the latest reported state.
 class RemotePlayer {
   constructor(id, events) { this.id = id; this.ev = events; this.st = { time: 0, dur: 0, state: -1, vd: {}, at: performance.now() }; this.readyFired = false; }
   _cmd(fn, ...args) { Bus.send({ t: 'cmd', deck: this.id, fn, args }); }
@@ -297,17 +299,17 @@ class RemotePlayer {
 function viewerLost() {
   const was = Bus.connected;
   Bus.connected = false; Bus.activated = false;
-  // Nothing plays now; keep each song's position so it resumes there when a Viewer tab reconnects.
+  // Nothing plays now; keep each song's position so it resumes there when a Share tab reconnects.
   Object.values(decks).forEach(d => { if (d.player instanceof RemotePlayer) { d.ready = false; d.player.readyFired = false; d.player.st.state = -1; d.ytState = -1; } });
   renderViewerPill();
-  if (was && (decks.A.wantPlay || decks.B.wantPlay)) toast('The Viewer tab was closed — music stopped. Click VIEWER TAB to reopen it; songs resume where they were.', 'bad');
+  if (was && (decks.A.wantPlay || decks.B.wantPlay)) toast('The Share tab was closed — music stopped. Click SHARE TAB to reopen it; songs resume where they were.', 'bad');
 }
 
 if (Bus.ch) Bus.ch.onmessage = e => {
   const m = e.data || {};
   if (!S.cfg.viewerTab) return;
   if (m.t === 'bye') { if (m.vid === Bus.instance) viewerLost(); return; }
-  // A different Viewer tab than before (reopened or reloaded): start it fresh.
+  // A different Share tab than before (reopened or reloaded): start it fresh.
   if (m.vid && m.vid !== Bus.instance) {
     if (Bus.instance) viewerLost();
     Bus.instance = m.vid;
@@ -321,6 +323,7 @@ if (Bus.ch) Bus.ch.onmessage = e => {
     stageSig = ''; renderStage();
   } else if (m.t === 'ready') remoteReady(m.deck);
   else if (m.t === 'state') { const p = decks[m.deck]?.player; if (p instanceof RemotePlayer) { p.st.state = m.s; p.st.at = performance.now(); p.ev.onStateChange({ data: m.s }); } }
+  else if (m.t === 'ovEnd') { if (S.ovOn && ovKey(S.ovOn) === m.k) hideOverlay(); }
   else if (m.t === 'error') { const p = decks[m.deck]?.player; if (p instanceof RemotePlayer) p.ev.onError({ data: m.code }); }
   else if (m.t === 'tick') {
     ['A', 'B'].forEach(id => { const p = decks[id]?.player; if (p instanceof RemotePlayer && m[id]) p.update(m[id]); });
@@ -338,7 +341,7 @@ function remoteReady(id) {
 function openViewer() {
   let w = null;
   try { w = window.open('', 'iii-viewer'); } catch { /* blocked */ }
-  if (!w) { toast('Chrome blocked the Viewer tab. Click the blocked-pop-up icon in the address bar and choose "Always allow" for localhost:8765.', 'bad'); return; }
+  if (!w) { toast('Chrome blocked the Share tab. Click the blocked-pop-up icon in the address bar and choose "Always allow" for localhost:8765.', 'bad'); return; }
   try { if (!w.location.href || w.location.href === 'about:blank') w.location.href = 'viewer.html?v=' + APP_VERSION; } catch { /* already open */ }
   try { w.focus(); } catch { /* fine */ }
   Bus.win = w;
@@ -348,9 +351,9 @@ function renderViewerPill() {
   const p = $('#viewerStatus');
   if (!p) return;
   p.classList.toggle('hidden', !S.cfg.viewerTab);
-  if (!Bus.connected) { p.textContent = 'Viewer tab: NOT OPEN — click'; p.className = 'pill pill-btn bad'; }
-  else if (!Bus.activated) { p.textContent = 'Viewer tab: click it once'; p.className = 'pill pill-btn warn'; }
-  else { p.textContent = 'Viewer tab: connected ✓'; p.className = 'pill pill-btn ok'; }
+  if (!Bus.connected) { p.textContent = 'Share tab: NOT OPEN — click'; p.className = 'pill pill-btn bad'; }
+  else if (!Bus.activated) { p.textContent = 'Share tab: click it once'; p.className = 'pill pill-btn warn'; }
+  else { p.textContent = 'Share tab: connected ✓'; p.className = 'pill pill-btn ok'; }
 }
 
 /* ---------------- volume model ---------------- */
@@ -422,7 +425,7 @@ class Deck {
 
   create() {
     if (S.cfg.viewerTab) {
-      this.r.player.innerHTML = '<div class="remote-screen"><img alt=""><span>▶ plays on the Viewer tab</span></div>';
+      this.r.player.innerHTML = '<div class="remote-screen"><img alt=""><span>▶ plays on the Share tab</span></div>';
       this.r.remoteImg = this.r.player.querySelector('img');
       this.player = new RemotePlayer(this.id, {
         onReady: () => { this.ready = true; this.lastVol = -1; applyVolumes(); if (this.track) this.resume(); },
@@ -445,7 +448,7 @@ class Deck {
     });
   }
 
-  // Viewer-tab mode: a muted copy of the video on the deck, kept in step with the Viewer tab.
+  // Viewer-tab mode: a muted copy of the video on the deck, kept in step with the Share tab.
   syncMirror() {
     if (!S.cfg.viewerTab || !S.cfg.deckVideo) {
       if (this.el.classList.contains('mirror-on')) { this.el.classList.remove('mirror-on'); this.mirror?.pauseVideo?.(); }
@@ -483,7 +486,7 @@ class Deck {
     this.el.classList.toggle('mirror-on', st === 1 || st === 2);
   }
 
-  // After the Viewer tab (re)connects: carry on from where this song was.
+  // After the Share tab (re)connects: carry on from where this song was.
   resume() {
     const midSong = this.played && !this.finished && this.time > 0;
     const o = { videoId: this.track.videoId, startSeconds: midSong ? this.time : (this.cuePoint || 0) };
@@ -1449,7 +1452,7 @@ function setStage(on) {
 }
 
 function toggleFullscreen() {
-  if (S.cfg.viewerTab) { openViewer(); toast('Full screen: press F in the Viewer tab'); return; }
+  if (S.cfg.viewerTab) { openViewer(); toast('Full screen: press F in the Share tab'); return; }
   if (!S.stage) setStage(true);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else document.documentElement.requestFullscreen().catch(() => toast('Full screen was blocked — click the page, then press F', 'bad'));
@@ -1465,12 +1468,116 @@ function sendDisplay() {
   const msg = {
     t: 'display',
     A: { op: +opA.toFixed(2), top: wa >= 0.5 }, B: { op: +opB.toFixed(2), top: wa < 0.5 },
-    badge: t && !main.errored ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')) } : null
+    badge: t && !main.errored ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')) } : null,
+    ov: overlayMsg()
   };
   const sig = JSON.stringify(msg);
   if (sig === lastDisplay && Date.now() - lastDisplayAt < 2000) return;
   lastDisplay = sig; lastDisplayAt = Date.now();
   Bus.send(msg);
+}
+
+/* ---------------- overlays: pictures and short videos over the music, on the share page ---------------- */
+
+const OV_IMG = /\.(png|jpe?g|gif|webp|avif)(?:[?#].*)?$/i, OV_VID = /\.(mp4|webm|m4v)(?:[?#].*)?$/i;
+const safeOvSrc = s => (/^\/overlay\/[a-f0-9]{24}\.(png|jpg|gif|webp|mp4|webm)$/.test(s || '') || /^https?:\/\/[^\s"'<>\\]+$/i.test(s || '')) ? s : '';
+const ovKey = on => on.id + '@' + on.at;
+const ovById = id => S.overlays.find(o => o.id === id);
+// Web links that are pictures or videos (not YouTube). any = also accept links without a file ending.
+function mediaLinks(text, any = false) {
+  const out = [];
+  for (const raw of String(text || '').match(/https?:\/\/[^\s"'<>]+/gi) || []) {
+    const u = raw.replace(/[).,\]]+$/, '');
+    if (ytUrls(u).length || out.includes(u)) continue;
+    if (any || OV_IMG.test(u) || OV_VID.test(u)) out.push(u);
+  }
+  return out;
+}
+function addOverlayLinks(text, any = false) {
+  const links = mediaLinks(text, any);
+  if (!links.length) { toast('No picture or video link found', 'bad'); return 0; }
+  let n = 0;
+  for (const u of links) {
+    if (S.overlays.some(o => o.src === u)) continue;
+    let name = u; try { const x = new URL(u); name = decodeURIComponent(x.pathname.split('/').pop() || x.hostname); } catch { /* keep */ }
+    S.overlays.push({ id: uid(), kind: OV_VID.test(u) ? 'video' : 'image', src: u, name: name.slice(0, 60), addedAt: Date.now() }); n++;
+  }
+  save.overlays(); renderOverlays();
+  toast(n ? `Added ${n} overlay${n === 1 ? '' : 's'} — click one to show it` : 'Already in your overlays', 'good');
+  return n;
+}
+// Files from this computer are copied into the app's data folder (the share page can't read your disk).
+async function addOverlayFiles(files) {
+  const ok = [...files].filter(f => /^(image\/(png|jpeg|gif|webp)|video\/(mp4|webm))$/.test(f.type));
+  if (!ok.length) { toast('Overlays can be PNG, JPG, GIF or WEBP pictures, or MP4 / WEBM videos', 'bad'); return; }
+  if (!Disk.key) { toast('Start the mixer with its start button to add files', 'bad'); return; }
+  for (const f of ok) {
+    if (f.size > 100 * 1024 * 1024) { toast(`"${f.name}" is over 100 MB — trim it first`, 'bad'); continue; }
+    try {
+      const r = await fetch('/api/overlay', { method: 'POST', headers: { 'X-Key': Disk.key, 'Content-Type': 'application/octet-stream' }, body: f });
+      const j = await r.json();
+      if (!r.ok || !j.name) throw new Error(j.error || r.status);
+      const src = '/overlay/' + j.name;
+      if (!S.overlays.some(o => o.src === src)) S.overlays.push({ id: uid(), kind: j.type.startsWith('video/') ? 'video' : 'image', src, name: f.name.slice(0, 60), addedAt: Date.now() });
+    } catch (e) { toast(`Could not add "${f.name}": ${e.message}`, 'bad'); }
+  }
+  save.overlays(); renderOverlays();
+  toast('Overlays ready — click one to show it on the share page', 'good');
+}
+function showOverlay(o) {
+  if (!o) return;
+  if (!S.cfg.viewerTab) { toast('Overlays show on the Share tab — switch it on in Settings', 'bad'); return; }
+  const secs = +S.cfg.ovSecs || 0;
+  S.ovOn = { id: o.id, at: Date.now(), until: secs ? Date.now() + secs * 1000 : 0 };
+  renderOverlays(); sendDisplay();
+}
+function hideOverlay() { if (!S.ovOn) return; S.ovOn = null; renderOverlays(); sendDisplay(); }
+function toggleOverlay(o) { if (S.ovOn?.id === o?.id) hideOverlay(); else showOverlay(o); }
+function overlayMsg() {
+  const o = S.ovOn && ovById(S.ovOn.id);
+  if (!o || !safeOvSrc(o.src)) return null;
+  return { k: ovKey(S.ovOn), src: o.src, kind: o.kind, pos: S.cfg.ovPos, sound: !!S.cfg.ovSound, loop: !S.ovOn.until };
+}
+function ovTick() {
+  if (!S.ovOn) return;
+  if (S.ovOn.until && Date.now() >= S.ovOn.until) { hideOverlay(); return; }
+  const left = S.ovOn.until ? Math.ceil((S.ovOn.until - Date.now()) / 1000) + ' s' : 'ON';
+  const el = $(`#ovList [data-ov="${S.ovOn.id}"] .ovt`); if (el && el.textContent !== left) el.textContent = left;
+}
+function renderOverlays() {
+  const list = $('#ovList'); if (!list) return;
+  list.innerHTML = S.overlays.map((o, i) => {
+    const src = safeOvSrc(o.src), on = S.ovOn?.id === o.id;
+    const media = !src ? '<span class="ov-bad">?</span>' : o.kind === 'video'
+      ? `<video src="${esc(src)}#t=0.5" muted preload="metadata"></video><b class="ovk">▶</b>`
+      : `<img src="${esc(src)}" alt="" loading="lazy">`;
+    return `<div class="ovi${on ? ' on' : ''}" data-ov="${o.id}" title="${esc(o.name || '')} — click to ${on ? 'hide' : 'show'}${i < 4 ? ` (Stream Deck: ov${i + 1})` : ''}">${media}<i class="ovt">${on ? 'ON' : i + 1}</i><button type="button" class="ovx" data-x title="Remove from overlays">✕</button></div>`;
+  }).join('') || '<span class="ov-empty">Drag pictures or short videos here (from your computer or the web)</span>';
+  $('#ovHide')?.classList.toggle('hidden', !S.ovOn);
+}
+function initOverlayUI() {
+  const list = $('#ovList');
+  list.addEventListener('click', async e => {
+    const item = e.target.closest('[data-ov]'); if (!item) return;
+    const o = ovById(item.dataset.ov); if (!o) return;
+    if (e.target.closest('[data-x]')) {
+      if (await ask(`Remove "${o.name || 'this overlay'}" from your overlays?`, 'Remove')) {
+        if (S.ovOn?.id === o.id) hideOverlay();
+        S.overlays = S.overlays.filter(x => x !== o); save.overlays(); renderOverlays();
+      }
+      return;
+    }
+    toggleOverlay(o);
+  });
+  $('#ovPos').value = S.cfg.ovPos; $('#ovSecs').value = String(S.cfg.ovSecs); $('#ovSound').checked = !!S.cfg.ovSound;
+  $('#ovPos').onchange = e => { S.cfg.ovPos = e.target.value; save.cfg(); sendDisplay(); };
+  $('#ovSecs').onchange = e => { S.cfg.ovSecs = +e.target.value; save.cfg(); };
+  $('#ovSound').onchange = e => { S.cfg.ovSound = e.target.checked; save.cfg(); };
+  $('#ovAdd').onclick = () => $('#ovFile').click();
+  $('#ovFile').onchange = e => { addOverlayFiles(e.target.files); e.target.value = ''; };
+  $('#ovHide').onclick = hideOverlay;
+  $('#ovUrl').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (addOverlayLinks(e.target.value, true)) e.target.value = ''; } });
+  renderOverlays();
 }
 
 function renderStage() {
@@ -1604,8 +1711,8 @@ const COMMANDS = {
   talkOn: ['Talk-over duck ON', null, () => setTalk(true)],
   talkOff: ['Talk-over duck OFF', null, () => setTalk(false)],
   onair: ['On Air on / off', 'o', toggleOnAir],
-  stage: ['Viewer page on / off (share this tab)', 'v', () => setStage(!S.stage)],
-  full: ['Viewer page full screen on / off', 'f', toggleFullscreen],
+  stage: ['Share page on / off (share this tab)', 'v', () => setStage(!S.stage)],
+  full: ['Share page full screen on / off', 'f', toggleFullscreen],
   masterUp: ['Master volume +5', 'ArrowUp', () => setMaster(S.cfg.master + 5)],
   masterDown: ['Master volume −5', 'ArrowDown', () => setMaster(S.cfg.master - 5)],
   volADown: ['Deck A volume −5', '[', () => setDeckVol('A', S.cfg.volA - 5)],
@@ -1616,6 +1723,11 @@ const COMMANDS = {
   hcA2: ['Deck A hot cue 2', null, () => decks.A.hotcue(1)],
   hcB1: ['Deck B hot cue 1', null, () => decks.B.hotcue(0)],
   hcB2: ['Deck B hot cue 2', null, () => decks.B.hotcue(1)],
+  ovHide: ['Hide the overlay', null, hideOverlay],
+  ov1: ['Overlay 1 show / hide', null, () => toggleOverlay(S.overlays[0])],
+  ov2: ['Overlay 2 show / hide', null, () => toggleOverlay(S.overlays[1])],
+  ov3: ['Overlay 3 show / hide', null, () => toggleOverlay(S.overlays[2])],
+  ov4: ['Overlay 4 show / hide', null, () => toggleOverlay(S.overlays[3])],
   panic: ['Fade everything out (2 s) — Stream Deck / button only', null, panic]
 };
 
@@ -1799,7 +1911,8 @@ function initQueueUI() {
   const quick = place => {
     const v = $('#quickUrl').value.trim();
     if (!v) { $('#quickUrl').focus(); return; }
-    ingestLinks(v, place); $('#quickUrl').value = '';
+    if (!ytUrls(v).length && mediaLinks(v).length) addOverlayLinks(v); else ingestLinks(v, place);
+    $('#quickUrl').value = '';
     renderQueue();
   };
   $('#quickAdd').addEventListener('submit', e => { e.preventDefault(); quick('end'); });
@@ -1964,7 +2077,7 @@ async function recheckSongs(list) {
 
 /* ---------------- drag & paste YouTube links straight in ---------------- */
 
-const linkDrag = e => !drag && [...(e.dataTransfer?.types || [])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'text/html');
+const linkDrag = e => !drag && [...(e.dataTransfer?.types || [])].some(t => t === 'text/uri-list' || t === 'text/plain' || t === 'text/html' || t === 'Files');
 function droppedText(e) {
   const dt = e.dataTransfer;
   return [dt.getData('text/uri-list'), dt.getData('text/plain'), dt.getData('text/html')].filter(Boolean).join('\n');
@@ -2069,7 +2182,15 @@ document.addEventListener('drop', e => {
   clearTimeout(dzTimer); showDropZone(false);
   const deckEl = e.target.closest?.('.deck');
   const where = e.target.closest?.('.dz')?.dataset.dz || (deckEl ? (deckEl.classList.contains('deck-a') ? 'A' : 'B') : 'Q');
-  const tracks = ingestLinks(droppedText(e), where === 'N' ? 'next' : 'end');
+  // pictures and video files from the computer are always overlays
+  if (e.dataTransfer.files?.length) { addOverlayFiles(e.dataTransfer.files); return; }
+  const text = droppedText(e);
+  if (where === 'O') {
+    if (ytUrls(text).length && !mediaLinks(text, true).length) { toast('YouTube songs go on a deck or the list. Overlays are pictures or short video files / links.', 'bad'); return; }
+    addOverlayLinks(text, true); return;
+  }
+  if (!ytUrls(text).length && mediaLinks(text).length) { addOverlayLinks(text); return; }
+  const tracks = ingestLinks(text, where === 'N' ? 'next' : 'end');
   if (!tracks.length) return;
   if (where === 'A' || where === 'B') decks[where].userLoad(tracks[0]);
   renderQueue();
@@ -2077,8 +2198,10 @@ document.addEventListener('drop', e => {
 
 document.addEventListener('paste', e => {
   if (e.target.closest('input, textarea, select') || !$('#imp').classList.contains('hidden')) return;
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addOverlayFiles(files); return; }
   const text = e.clipboardData?.getData('text') || '';
-  if (!ytUrls(text).length) return;
+  if (!ytUrls(text).length) { if (mediaLinks(text).length) { e.preventDefault(); addOverlayLinks(text); } return; }
   e.preventDefault();
   ingestLinks(text);
   renderQueue();
@@ -2431,7 +2554,7 @@ function initSettingsUI() {
     S.cfg.viewerTab = e.target.checked; save.cfg();
     setTimeout(() => location.reload(), 300);
   };
-  $('#stageBtn').textContent = S.cfg.viewerTab ? '◉ VIEWER TAB' : '◉ VIEWER PAGE';
+  $('#stageBtn').textContent = S.cfg.viewerTab ? '◉ SHARE TAB' : '◉ VIEWER PAGE';
   $('#exportBtn').onclick = exportData;
   $('#importFile').onchange = e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; };
   $('#keysBody').addEventListener('click', async e => {
@@ -2537,7 +2660,7 @@ function deadAirCheck() {
 }
 
 let tickN = 0, lastFrame = 0;
-// Runs the mixer's clock: from a timer, and from the Viewer tab's messages (which Chrome never slows down).
+// Runs the mixer's clock: from a timer, and from the Share tab's messages (which Chrome never slows down).
 function frame() {
   const now = performance.now();
   if (now - lastFrame < 85) return;
@@ -2548,6 +2671,7 @@ function tick() {
   tickN++;
   Object.values(decks).forEach(d => d.tick());
   autoTick();
+  ovTick();
   Voice.tick();
   if (tickN % 2 === 0) Remote.poll();
   renderAll();
@@ -2600,7 +2724,7 @@ function boot() {
   decks.A = new Deck('A', $('#mountA'));
   decks.B = new Deck('B', $('#mountB'));
   Tip.init();
-  initMixerUI(); initQueueUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
+  initMixerUI(); initQueueUI(); initOverlayUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab, true); });
   renderEverything(); renderVersion(); syncXfUI(); applyVolumes();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
@@ -2611,7 +2735,7 @@ function boot() {
   if (location.protocol === 'file:') $('#fileWarn').classList.remove('hidden');
   $('#power').onclick = () => {
     $('#splash').classList.add('hidden');
-    if (S.cfg.viewerTab) openViewer(); // opens the Viewer tab (this click lets Chrome open it)
+    if (S.cfg.viewerTab) openViewer(); // opens the Share tab (this click lets Chrome open it)
     if (!S.library.length && !S.creators.length) $('#help').classList.remove('hidden');
   };
   if (S.cfg.viewerTab) { decks.A.create(); decks.B.create(); Bus.send({ t: 'ping' }); }

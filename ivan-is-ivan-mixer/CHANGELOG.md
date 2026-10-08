@@ -1,4 +1,4 @@
-# Changelog — Ivan is Ivan Live Mixer
+# Changelog — Late Night with Ivan (DJ Board)
 
 Every release is listed here, newest first. The running version is shown in the mixer's top bar, on the start screen and in **Settings → About this version**.
 
@@ -17,6 +17,31 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 - **Data format** is a separate number. It only changes if the way your library is saved changes. Every backup and disk copy records both the data format and the app version that wrote it.
 
 ---
+
+## v4.0.0 — 2026-10-08 — Late Night with Ivan
+Commit: `pending`
+- **New name:** *Late Night with Ivan — DJ Board*, by Mad World Studios. The viewer page is now called the **Share tab**, the tab you share in StreamYard.
+- **Overlays:** pictures and short videos over the music on the Share tab.
+  - Drag them in from your computer or the web, or paste a screenshot.
+  - Click one to show it, as **Big**, **Full screen**, **Corner** or **Lower third**.
+  - It stays up for 5, 10 or 20 seconds, or until you click it again. A clip can play its own sound.
+  - Stream Deck: `ov1`–`ov4` and `ovHide`.
+- **A new install and update button that works from a zip.** It no longer uses GitHub.
+  - Unzip the download and double-click **Mad World Studios**. It installs into `C:\Users\<you>\LateNightWithIvan` and puts the button on the desktop.
+  - To update, put the new zip in Downloads and click the button.
+  - The old version, older zips, older unzipped copies and old start buttons go to the **Recycle Bin**.
+  - If an older copy is still running, it's closed first so its folder can be replaced.
+- **Your data is kept apart from the app** in `LateNightWithIvan\data`:
+  - your songs, with a copy saved before every update in `data\versions\`;
+  - your overlays and the Stream Deck key.
+
+  Your songs and key come over from the old `IvanIsIvanMixer` install automatically. So do songs found in old unzipped copies.
+- **Security:**
+  - The servers check what each overlay file really is from its first bytes, not its name, and accept only pictures and videos up to 100 MB.
+  - Uploads need the private key.
+  - Files are served with `nosniff`.
+  - The Share tab shows overlays only as a picture or video, never as a web page.
+- The old `Ivan Mixer.bat` is retired.
 
 ## v3.4.1 — 2026-10-06 — Fix: see updates straight away
 Commit: `c25508c`

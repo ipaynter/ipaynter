@@ -4,25 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="icon.png">
-<title>Ivan is Ivan — Live Mixer</title>
-<link rel="stylesheet" href="styles.css?v=3.4.1">
+<title>Late Night with Ivan — DJ Board</title>
+<link rel="stylesheet" href="styles.css?v=4.0.0">
 </head>
 <body>
 
 <!-- Power-on: Chrome needs one click before it allows sound -->
 <div id="splash" class="splash">
   <div class="splash-inner">
-    <div class="logo-big">IVAN <em>is</em> IVAN</div>
-    <div class="logo-sub">live mixer</div>
+    <div class="logo-big">LATE NIGHT <em>with</em> IVAN</div>
+    <div class="logo-sub">DJ board</div>
     <div class="ver-splash" data-ver></div>
     <button id="power" class="power" type="button">Power on</button>
-    <p class="hint">One click wakes up the sound and opens the Viewer tab.</p>
+    <p class="hint">One click wakes up the sound and opens the Share tab.</p>
     <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Start the mixer with the desktop button or <b>start-windows.bat</b>.</p>
   </div>
 </div>
 
 <header class="topbar">
-  <div class="brand">IVAN <em>is</em> IVAN <span class="ver" data-ver title="App version. See CHANGELOG.md."></span></div>
+  <div class="brand">LATE NIGHT <em>with</em> IVAN <span class="ver" data-ver title="App version. See CHANGELOG.md."></span></div>
   <button id="onair" class="onair" type="button" data-cmd="onair" title="Starts the show clock. Press it when you go live in StreamYard.">ON AIR</button>
   <div class="clocks">
     <span title="Show time"><label>show</label><b id="showTimer">0:00:00</b></span>
@@ -31,8 +31,8 @@
   </div>
   <span class="spacer"></span>
   <button id="inboxPill" class="pill pill-btn hidden" type="button" title="New songs from your writers are waiting for your OK">🔔 <span id="inboxPillN">0</span> new</button>
-  <button id="stageBtn" class="pill pill-btn" type="button" data-cmd="stage" title="Show the Viewer tab: the full video with the creator badge. Share THAT tab in StreamYard with tab audio.">Viewer tab</button>
-  <button id="viewerStatus" class="pill pill-btn hidden" type="button" title="The Viewer tab plays the music and video for StreamYard. Click to open or show it.">…</button>
+  <button id="stageBtn" class="pill pill-btn" type="button" data-cmd="stage" title="Show the Share tab: the full video with the creator badge. Share THAT tab in StreamYard with tab audio.">Share tab</button>
+  <button id="viewerStatus" class="pill pill-btn hidden" type="button" title="The Share tab plays the music and video for StreamYard. Click to open or show it.">…</button>
   <span id="diskStatus" class="pill" title="Your list is also saved to the data folder next to the app">Disk</span>
   <span id="remoteStatus" class="pill" title="Stream Deck buttons work when the mixer is started with the desktop button">Deck</span>
   <span id="ytStatus" class="pill" title="YouTube connection">YouTube</span>
@@ -94,6 +94,25 @@
 
   <div id="mountB" class="deck-mount"></div>
 </main>
+
+<!-- OVERLAYS: pictures and short videos shown over the music on the share page -->
+<section class="ovbar" id="ovBar">
+  <b class="ov-title" title="Pictures and short videos that pop up over the music on the share page. Drag them in from your computer or the web, then click one to show it.">Overlays</b>
+  <div class="ov-list" id="ovList"></div>
+  <div class="ov-opts">
+    <select id="ovPos" title="Where it shows on the share page">
+      <option value="big">Big</option><option value="full">Full screen</option><option value="corner">Corner</option><option value="lower">Lower third</option>
+    </select>
+    <select id="ovSecs" title="How long it stays up (a video also stops when it ends)">
+      <option value="5">5 s</option><option value="10">10 s</option><option value="20">20 s</option><option value="0">until I click</option>
+    </select>
+    <label class="check" title="Play a video's own sound over the music"><input type="checkbox" id="ovSound"> sound</label>
+    <input id="ovUrl" class="ov-url" placeholder="picture / video link…" title="Paste a picture or video link from the web and press Enter">
+    <button type="button" id="ovAdd" title="Add pictures or short videos from your computer">+ Files</button>
+    <button type="button" id="ovHide" class="danger hidden" title="Take the overlay off the share page now">Hide ✕</button>
+    <input type="file" id="ovFile" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" multiple hidden>
+  </div>
+</section>
 
 <!-- THE LIST: all of the show's music, in play order -->
 <section class="listpanel">
@@ -175,8 +194,8 @@
             <option value="off">Off</option>
           </select></label>
         <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play songs from your list)</label>
-        <label class="check" title="ON (recommended): music and video play in a separate Viewer tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Viewer tab</b> (share that tab in StreamYard)</label>
-        <label class="check" title="Shows a silent copy of each video on its deck, in step with the Viewer tab. Untick on a slow computer or connection."><input type="checkbox" id="deckVideo" checked> Show the videos on the decks</label>
+        <label class="check" title="ON (recommended): music and video play in a separate Share tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Share tab</b> (share that tab in StreamYard)</label>
+        <label class="check" title="Shows a silent copy of each video on its deck, in step with the Share tab. Untick on a slow computer or connection."><input type="checkbox" id="deckVideo" checked> Show the videos on the decks</label>
       </div>
       <div class="card">
         <h3>About this version</h3>
@@ -274,7 +293,7 @@
       <li><b>Writers</b> (bottom): paste the YouTube channel link for you, Lance, Lise and Rhonda. Their new songs appear above the list — one click adds them.</li>
       <li><b>The list</b> is all the music, in play order. Paste or drag a YouTube link to add one. Drag rows to reorder. <b>✨ Line-up</b> arranges it for you (Undo puts it back).</li>
       <li><b>Click any song</b> in the list to cue it up, then press <b>▶ Play next</b> (or Space). Pick who drives: <b>Manual</b> (you DJ), <b>Assist</b> (cues the next song for you and mixes it in if you don't), or <b>Auto</b> (runs the show). <b>Manual</b> takes over any time.</li>
-      <li>The <b>Viewer tab</b> opens by itself: click it once, then share <b>that tab</b> in StreamYard with <i>Also share tab audio</i>.</li>
+      <li>The <b>Share tab</b> opens by itself: click it once, then share <b>that tab</b> in StreamYard with <i>Also share tab audio</i>.</li>
       <li>Talking? <b>🎙 Talk</b> dips the music.</li>
     </ol>
     <p class="dim">Hover over anything for help. Keys and Stream Deck buttons are in Settings.</p>
@@ -361,12 +380,13 @@
     <div class="dz dz-q" data-dz="Q"><span>⬇</span>Bottom of<b>THE LIST</b></div>
   </div>
   <div class="dz dz-b" data-dz="B"><span>⬇</span>Load on<b>DECK B</b></div>
-  <div class="dz-hint">Drop the YouTube link on a box</div>
+  <div class="dz dz-o" data-dz="O"><span>⬇</span>Picture or video<b>OVERLAY</b></div>
+  <div class="dz-hint">Drop it on a box · songs: A, B, Next or the list · pictures and clips: Overlay</div>
 </div>
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=3.4.1"></script>
+<script src="app.js?v=4.0.0"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>

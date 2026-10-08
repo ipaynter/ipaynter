@@ -1,43 +1,41 @@
-# Ivan is Ivan — Live Mixer
+# Late Night with Ivan — DJ Board
 
-A two-deck DJ mixer for YouTube links, built for the *Ivan is Ivan* live show on StreamYard.
-Runs on your own computer in Google Chrome. You don't need an account, you don't need to install anything on Windows, and nothing tracks you.
+A two-deck DJ board for YouTube links, built for *Late Night with Ivan* on StreamYard. By Mad World Studios.
+It runs on your own computer in Google Chrome, with no account and no tracking. It never talks to GitHub.
 
-**Version:** see the `VERSION` file, the top bar of the mixer, and `CHANGELOG.md` for what changed in each release.
+**Version:** see `VERSION`, the top bar of the board, and `CHANGELOG.md`.
 
-## Easiest: the Mad World Studios button
+## Install and update: the Mad World Studios button
 
-1. Double-click **`Mad World Studios.bat`** once, from wherever you saved it.
-2. It installs the mixer into `C:\Users\<you>\IvanIsIvanMixer`, puts a **Mad World Studios** button on the desktop, and starts the mixer.
-3. From then on, just click the **Mad World Studios** button.
+1. Right-click the zip → **Extract All**.
+2. In the extracted folder, double-click **Mad World Studios**. If Windows says *"Windows protected your PC"*: **More info → Run anyway**. You only see this the first time.
+3. It installs into `C:\Users\<you>\LateNightWithIvan`, puts a **MAD WORLD STUDIOS** button on the desktop, and opens the board.
 
-**Updates are automatic.** Every click checks GitHub (`ipaynter/ipaynter`) for a newer version and installs it first. Your songs and Stream Deck key are kept. With no internet, it starts the version you have, or installs a newer `ivan-is-ivan-mixer-vX.Y.Z.zip` from Downloads if there is one.
+**To update:** download the new zip into **Downloads**, then click the desktop button. Each click:
+- installs the newest version found: an unzipped folder, or a `late-night-with-ivan-vX.Y.Z.zip` in Downloads;
+- saves a copy of your songs first, in `data\versions\`;
+- moves the old version, older zips, older unzipped copies and old start buttons to the **Recycle Bin**. Nothing is deleted outright;
+- the first time, brings over your songs, Stream Deck key and settings from the old `IvanIsIvanMixer` install.
 
-## Start it
+**Your data** lives in `LateNightWithIvan\data`, separate from the app, so updates never touch it:
+- `mixer-data.json`: songs, writers and settings, plus a daily backup;
+- `versions\`: a copy before every update;
+- `overlays\`: your pictures and clips;
+- `control-key.txt`: the Stream Deck key.
 
-| Computer | What to do |
-|---|---|
-| **Windows** | Double-click `start-windows.bat`. Chrome opens the mixer. Keep the black window open during the show. |
-| **Mac / Linux** | Run `./start-mac-linux.sh` (needs Python 3). |
+Every version reads the data of the versions before it. **Settings → Export backup** gives you one file to keep.
 
-Then click **POWER ON**. Press **?** (top right) at any time for the quick-start guide, and hover over any control to see what it does and its shortcut key.
-
-Use the start script every time. If you double-click `index.html` directly, YouTube won't play and nothing is saved to disk.
-The mixer is at `http://localhost:8765`. It only answers this computer, not your network.
+**Why Chrome:** StreamYard can only capture tab audio from Chrome. The board and the Share tab talk to each other inside one browser, so both run in Chrome.
 
 ## If it won't start
 
-1. Double-click `start-windows.bat` again and **read the black window**. It always says what happened and stays open.
-2. The folder now has **`start-log.txt`**. Send that file, plus a photo of the black window, and the problem can be pinned down exactly.
-3. Common causes:
-   - **Windows SmartScreen** shows "Windows protected your PC". Click **More info → Run anyway**.
-   - **Antivirus** blocked the start script. Allow `start-windows.bat` / `serve.ps1` in that folder. The script only serves files to this computer, and it's plain text you can read.
-   - **You ran it from inside the zip.** Extract the zip first (right-click → Extract All), then run it from the extracted folder.
-   - **It opened in the wrong browser.** Copy `http://localhost:8765` into Chrome.
+1. Click the button again and **read the black window**. It says what happened and stays open.
+2. Send `LateNightWithIvan\install-log.txt` and `LateNightWithIvan\app\start-log.txt`, plus a photo of the black window.
+3. Antivirus may ask about `launcher.ps1` or `serve.ps1`. Both are plain text you can read. They only serve files to this computer.
 
 ## Daily flow
 
-1. Click the desktop button, then **Power on**. The **Viewer tab** opens. Click it once.
+1. Click the desktop button, then **Power on**. The **Share tab** opens. Click it once.
 2. **Writers** (bottom of the page): paste the YouTube channel link once each for you, Lance, Lise and Rhonda. Their new songs appear above the list. **✓ Add** puts a song at the bottom of the list.
 3. **The list** is all the show's music, in play order. Drag rows to reorder. **↑** plays a song next. **✨ Line-up** arranges the rest for you, and **Undo** puts it back.
 4. Choose who drives:
@@ -46,7 +44,7 @@ The mixer is at `http://localhost:8765`. It only answers this computer, not your
    - **Auto**: runs the show down the list. When the list runs out, it keeps going with fair picks from your writers.
 
    Click **Manual** any time to take over completely.
-5. In StreamYard, share the **Viewer tab** with *Also share tab audio*. Press **ON AIR** when you go live; that also starts a fresh "played" count.
+5. In StreamYard, share the **Share tab** with *Also share tab audio*. Press **ON AIR** when you go live; that also starts a fresh "played" count.
 6. After the show: **Log & credits → Credits: this show → Copy**.
 
 ## Adding music: just drag or paste the link
@@ -103,21 +101,33 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 - **Play next** puts that writer's best next song up next.
 - 🔔 checks for their new uploads, and the mixer also checks every 30 minutes when you're not on air.
 
-**Viewer tab (what viewers see)**
+**Share tab (what viewers see)**
 - A separate Chrome tab, opened automatically when you press POWER ON. Your mixer stays in its own tab, fully visible.
-- Click the Viewer tab **once** so Chrome lets it play sound. Then share **that tab** in StreamYard with **Also share tab audio**. The music plays from there.
+- Click the Share tab **once** so Chrome lets it play sound. Then share **that tab** in StreamYard with **Also share tab audio**. The music plays from there.
 - It shows the full YouTube video, plus one small badge: the **creator's picture, name and song title**. The video crossfades with the audio.
-- Press **F** in the Viewer tab for full screen. The mouse pointer hides by itself.
-- The top-bar light in the mixer shows its status. If it says **NOT OPEN**, click it to open the Viewer tab again. Songs resume where they were.
-- **Don't close the Viewer tab during the show.** The music plays from it.
+- Press **F** in the Share tab for full screen. The mouse pointer hides by itself.
+- The top-bar light in the mixer shows its status. If it says **NOT OPEN**, click it to open the Share tab again. Songs resume where they were.
+- **Don't close the Share tab during the show.** The music plays from it.
 - **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead.
+
+**Overlays: pictures and short videos over the music**
+- The **Overlays** strip sits under the decks. Add to it by:
+  - dragging pictures or clips in from your computer (PNG, JPG, GIF, WEBP, MP4, WEBM; up to 100 MB);
+  - pasting a screenshot (Ctrl+V);
+  - pasting a picture or video link from the web, or dragging one in.
+- **Click one** to show it on the Share tab. Click it again, or **Hide ✕**, to take it off.
+- Choose where it shows: **Big**, **Full screen**, **Corner** or **Lower third**.
+- Choose how long: 5, 10 or 20 seconds, or **until I click**. A video also goes away when it ends.
+- **sound** plays a clip's own audio over the music.
+- Files you add are copied into `data\overlays`. The Share tab only ever shows them as a picture or video, never as a web page.
+- Stream Deck: `ov1`–`ov4` show or hide overlays 1–4, and `ovHide` takes it off.
 
 **Play log & credits**
 - Everything played is logged. **Credits: this show** builds the list for your YouTube description, with links to the writers' channels.
 
 ## Getting the music into StreamYard
 
-1. **Share the Viewer tab (free, simplest).** In StreamYard choose *Share screen → Chrome Tab → "Ivan is Ivan — VIEWER (share this tab)"* and tick **Also share tab audio**. Viewers see the full video with the creator badge and hear the music. Your mixer stays in its own tab.
+1. **Share the Share tab (free, simplest).** In StreamYard choose *Share screen → Chrome Tab → "Late Night with Ivan — SHARE (StreamYard)"* and tick **Also share tab audio**. Viewers see the full video with the creator badge and hear the music. Your mixer stays in its own tab.
 2. **Virtual audio mixer (best control).** Install the free **Voicemeeter** (Windows). Route your XLR interface and Chrome into it, and pick *Voicemeeter Output* as your mic in StreamYard.
 
 Run a private test broadcast first.
@@ -150,13 +160,13 @@ The URLs contain a private key (`control-key.txt`), so other websites can't pres
 ## Your data
 
 Everything is saved **twice**:
-- in Chrome on this computer, and
-- in the `data` folder next to the app: `mixer-data.json`, plus one dated backup per day, keeping the last 30 days.
+- in Chrome on this computer;
+- in `LateNightWithIvan\data` (see above).
 
-If Chrome's data is ever cleared, the mixer restores itself from the `data` folder on the next start.
-**Settings → Export backup** gives you one file to copy to another computer or share with your creators. **Import backup** merges it in.
+If Chrome's data is ever cleared, the board restores itself from the `data` folder on the next start.
+**Settings → Export backup** gives you one file to copy to another computer. **Import backup** merges it in.
 
-The only outside connections are to YouTube: the players, thumbnails, title look-ups, and the public upload feeds of your creators. Players use YouTube's privacy-enhanced `youtube-nocookie.com` mode.
+The only outside connections are to YouTube (players, thumbnails, title look-ups, your writers' public upload feeds and playlists), plus any overlay links you add yourself. The players use YouTube's privacy-enhanced `youtube-nocookie.com` mode.
 
 ## Limits
 
@@ -170,7 +180,6 @@ The only outside connections are to YouTube: the players, thumbnails, title look
 
 ## Versions and updates
 
-- The current version is shown in the top bar, and in **Settings → About this version**.
-- What changed in each version is in `CHANGELOG.md`.
-- **To update:** close the mixer and its black window, then extract the new zip **over** your app folder. Your `data` folder and `control-key.txt` stay as they are, so your library and Stream Deck buttons keep working. Start again and check that the new version number shows.
-- If the mixer says *Version mismatch*, press **Ctrl+F5** once.
+- The current version is in the top bar and in **Settings → About this version**. `CHANGELOG.md` lists what changed in each one.
+- To update: download the new zip into Downloads, then click the **Mad World Studios** button. See the top of this file.
+- If the board says *Version mismatch*, press **Ctrl+F5** once.

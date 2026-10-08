@@ -1,4 +1,4 @@
-# Ivan is Ivan - Live Mixer local server (Windows, no install needed).
+# Late Night with Ivan - DJ Board local server (Windows, no install needed).
 # Serves the mixer on http://localhost:8765 (this computer only) and:
 #   /api/cmd/<name>?k=<key>  Stream Deck "Website" action (GET in background)
 #   /api/poll                mixer page picks up pending commands
@@ -8,6 +8,10 @@
 #   /api/channel?h=|c=       a creator's channel ID and profile picture
 #   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
 #   /api/playlist?list=<id>  the video IDs of a public or unlisted playlist, in order
+#   /api/overlay (POST)      stores a picture or short video for the share page (data\overlays)
+#   /overlay/<name>          serves a stored overlay
+# Your data (songs, backups, overlays, Stream Deck key) lives in the folder named by
+# LNWI_DATA (set by the start button), else in the "data" folder next to this file.
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -15,9 +19,24 @@ $port = 8765
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $sep = [IO.Path]::DirectorySeparatorChar
 if (-not $root.EndsWith($sep)) { $root += $sep }
-$dataDir = Join-Path $root 'data'
+$dataDir = if ($env:LNWI_DATA) { [IO.Path]::GetFullPath($env:LNWI_DATA) } else { Join-Path $root 'data' }
+if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
 $dataFile = Join-Path $dataDir 'mixer-data.json'
+$overlayDir = Join-Path $dataDir 'overlays'
 $maxBody = 20MB
+$maxOverlay = 100MB
+# Overlays: the type is decided by the file's first bytes, never by its name.
+$overlayMime = @{ 'png' = 'image/png'; 'jpg' = 'image/jpeg'; 'gif' = 'image/gif'; 'webp' = 'image/webp'; 'mp4' = 'video/mp4'; 'webm' = 'video/webm' }
+function Get-MediaType([byte[]]$b) {
+    if ($b.Length -lt 12) { return $null }
+    if ($b[0] -eq 0x89 -and $b[1] -eq 0x50 -and $b[2] -eq 0x4E -and $b[3] -eq 0x47) { return 'png' }
+    if ($b[0] -eq 0xFF -and $b[1] -eq 0xD8 -and $b[2] -eq 0xFF) { return 'jpg' }
+    if ($b[0] -eq 0x47 -and $b[1] -eq 0x49 -and $b[2] -eq 0x46 -and $b[3] -eq 0x38) { return 'gif' }
+    if ([Text.Encoding]::ASCII.GetString($b, 0, 4) -eq 'RIFF' -and [Text.Encoding]::ASCII.GetString($b, 8, 4) -eq 'WEBP') { return 'webp' }
+    if ([Text.Encoding]::ASCII.GetString($b, 4, 4) -eq 'ftyp') { return 'mp4' }
+    if ($b[0] -eq 0x1A -and $b[1] -eq 0x45 -and $b[2] -eq 0xDF -and $b[3] -eq 0xA3) { return 'webm' }
+    return $null
+}
 $keepDaily = 30
 
 $url = "http://localhost:$port/"
@@ -50,7 +69,9 @@ $version = 'unknown'
 $versionFile = Join-Path $root 'VERSION'
 if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
 
-$keyFile = Join-Path $root 'control-key.txt'
+$keyFile = Join-Path $dataDir 'control-key.txt'
+$oldKey = Join-Path $root 'control-key.txt'   # versions before 4.0 kept it next to the app
+if (-not (Test-Path $keyFile) -and (Test-Path $oldKey)) { Copy-Item -LiteralPath $oldKey -Destination $keyFile }
 if (Test-Path $keyFile) {
     $key = (Get-Content $keyFile -Raw).Trim()
 } else {
@@ -74,6 +95,7 @@ function Send-Bytes($res, [byte[]]$body, $type, $status = 200) {
     $res.StatusCode = $status
     $res.ContentType = $type
     $res.Headers.Add('Cache-Control', 'no-store')
+    $res.Headers.Add('X-Content-Type-Options', 'nosniff')
     $res.ContentLength64 = $body.Length
     $res.OutputStream.Write($body, 0, $body.Length)
     $res.Close()
@@ -86,7 +108,7 @@ function Send-Json($res, $json, $status = 200) {
 function Get-YouTube([string]$url) {
     $wc = New-Object System.Net.WebClient
     $wc.Encoding = [Text.Encoding]::UTF8
-    $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (IvanIsIvanMixer)')
+    $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (LateNightWithIvan)')
     $wc.Headers.Add('Accept-Language', 'en')
     $wc.Headers.Add('Cookie', 'CONSENT=YES+1; SOCS=CAI')
     try { return $wc.DownloadString($url) } finally { $wc.Dispose() }
@@ -119,7 +141,7 @@ try { $listener.Start() } catch {
         $listener.Prefixes.Add($url)
         try { $listener.Start(); $running = $null } catch {
             Write-Host "The old mixer (v$($running.version)) would not close." -ForegroundColor Red
-            Write-Host 'Close every black "Ivan is Ivan" window (or restart the computer), then try again.'
+            Write-Host 'Close every black "Late Night with Ivan" window (or restart the computer), then try again.'
             Write-Log 'Old mixer would not close'
             Read-Host 'Press Enter to close'
             exit 1
@@ -140,7 +162,7 @@ try { $listener.Start() } catch {
     }
 }
 
-Write-Host "Ivan is Ivan - Live Mixer v$version running at $url" -ForegroundColor Cyan
+Write-Host "Late Night with Ivan - DJ Board v$version running at $url" -ForegroundColor Cyan
 Write-Host 'Keep this window open during the show. Close it to stop the mixer.'
 Write-Log "Running at $url"
 Open-Mixer
@@ -155,9 +177,23 @@ try {
             $path = [Uri]::UnescapeDataString($req.Url.AbsolutePath)
 
             if ($req.HttpMethod -eq 'POST') {
-                if ($path -ne '/api/save') { Send-Json $res '{"error":"not found"}' 404; continue }
-                # Custom header + JSON type means other websites cannot send this (browser preflight blocks them).
+                if ($path -ne '/api/save' -and $path -ne '/api/overlay') { Send-Json $res '{"error":"not found"}' 404; continue }
+                # Custom header means other websites cannot send this (browser preflight blocks them).
                 if ($req.Headers['X-Key'] -ne $key) { Send-Json $res '{"error":"bad key"}' 403; continue }
+                if ($path -eq '/api/overlay') {
+                    if ($req.ContentLength64 -le 0 -or $req.ContentLength64 -gt $maxOverlay) { Send-Json $res '{"error":"too big (100 MB max)"}' 400; continue }
+                    $ms = New-Object IO.MemoryStream
+                    $req.InputStream.CopyTo($ms); $bytes = $ms.ToArray(); $ms.Dispose()
+                    $kind = Get-MediaType $bytes
+                    if (-not $kind) { Send-Json $res '{"error":"only PNG, JPG, GIF, WEBP, MP4 or WEBM"}' 400; continue }
+                    $sha = [Security.Cryptography.SHA256]::Create()
+                    $hash = -join ($sha.ComputeHash($bytes)[0..11] | ForEach-Object { $_.ToString('x2') })
+                    $name = "$hash.$kind"
+                    if (-not (Test-Path $overlayDir)) { New-Item -ItemType Directory -Path $overlayDir | Out-Null }
+                    $dest = Join-Path $overlayDir $name
+                    if (-not (Test-Path $dest)) { [IO.File]::WriteAllBytes($dest, $bytes) }
+                    Send-Json $res ('{"name":"' + $name + '","type":"' + $overlayMime[$kind] + '"}'); continue
+                }
                 if ($req.ContentLength64 -le 0 -or $req.ContentLength64 -gt $maxBody) { Send-Json $res '{"error":"bad size"}' 400; continue }
                 $reader = New-Object IO.StreamReader($req.InputStream, [Text.Encoding]::UTF8)
                 $body = $reader.ReadToEnd(); $reader.Close()
@@ -173,6 +209,12 @@ try {
                 Send-Json $res '{"ok":true}'; continue
             }
 
+            if ($path -match '^/overlay/([a-f0-9]{24})\.(png|jpg|gif|webp|mp4|webm)$') {
+                $f = Join-Path $overlayDir "$($Matches[1]).$($Matches[2])"
+                if (Test-Path -LiteralPath $f) { Send-Bytes $res ([IO.File]::ReadAllBytes($f)) $overlayMime[$Matches[2]] }
+                else { Send-Bytes $res ($utf8.GetBytes('Not found')) 'text/plain' 404 }
+                continue
+            }
             if ($path -eq '/api/info') { Send-Json $res ('{"key":"' + $key + '","version":"' + $version + '"}'); continue }
             if ($path -eq '/api/poll') {
                 $items = @($pending | ForEach-Object { '"' + $_ + '"' })

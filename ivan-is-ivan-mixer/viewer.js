@@ -1,4 +1,4 @@
-/* Ivan is Ivan — Viewer tab.
+/* Late Night with Ivan — Share tab.
  * Plays the two YouTube decks full-window and shows the creator badge.
  * Everything is controlled by the Mixer tab through a same-origin BroadcastChannel.
  * Share THIS tab in StreamYard (with tab audio): the music comes from here.
@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id);
 const P = {}, ready = {}, pending = { A: [], B: [] };
 let activated = false, lastMixer = 0;
 
-// Each Viewer tab has its own ID, so the mixer can tell a reopened tab from the old one.
+// Each Share tab has its own ID, so the mixer can tell a reopened tab from the old one.
 const INSTANCE = Math.random().toString(36).slice(2) + Date.now().toString(36);
 const post = m => { try { ch.postMessage({ ...m, vid: INSTANCE }); } catch { /* channel closed */ } };
 // Only these player functions may be called from the mixer.
@@ -19,6 +19,9 @@ const ALLOWED = new Set(['loadVideoById', 'cueVideoById', 'playVideo', 'pauseVid
 const safeImg = u => (/^https:\/\/(yt3\.ggpht\.com|yt3\.googleusercontent\.com|i\.ytimg\.com)\/[\w\-./=~%?&]+$/.test(u || '') ||
   /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(u || '')) ? u : '';
 const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#22d3ee');
+// Overlays: a file stored by the mixer, or a plain http(s) link. Shown only as <img> or <video>, never as a page.
+const safeOvSrc = s => (/^\/overlay\/[a-f0-9]{24}\.(png|jpg|gif|webp|mp4|webm)$/.test(s || '') || /^https?:\/\/[^\s"'<>\\]+$/i.test(s || '')) ? s : '';
+const OV_POS = new Set(['big', 'full', 'corner', 'lower']);
 
 function makePlayer(id) {
   P[id] = new YT.Player('v' + id, {
@@ -40,6 +43,7 @@ function run(m) {
 
 let badgeSig = '';
 function display(m) {
+  overlay(m.ov);
   for (const id of ['A', 'B']) {
     const w = $('wrap' + id), d = m[id] || {};
     w.style.opacity = String(Math.max(0, Math.min(1, +d.op || 0)));
@@ -56,6 +60,33 @@ function display(m) {
   $('name').textContent = String(b.name || '');
   $('song').textContent = String(b.song || '');
   badge.classList.remove('hidden', 'enter'); void badge.offsetWidth; badge.classList.add('enter');
+}
+
+let ovSig = '', ovTimer = null;
+function overlay(o) {
+  const box = $('ov');
+  const src = o && safeOvSrc(o.src);
+  if (!src) {
+    if (ovSig) { ovSig = ''; box.classList.remove('show'); clearTimeout(ovTimer); ovTimer = setTimeout(() => { if (!ovSig) box.replaceChildren(); }, 500); }
+    return;
+  }
+  const pos = OV_POS.has(o.pos) ? o.pos : 'big';
+  if (o.k === ovSig) { box.className = 'ov show pos-' + pos; return; } // same overlay; position may change
+  ovSig = String(o.k);
+  clearTimeout(ovTimer);
+  const el = document.createElement(o.kind === 'video' ? 'video' : 'img');
+  if (o.kind === 'video') {
+    el.playsInline = true; el.muted = !o.sound; el.loop = !!o.loop;
+    const k = ovSig;
+    el.onended = () => post({ t: 'ovEnd', k });
+    el.src = src;
+    el.play().catch(() => { el.muted = true; el.play().catch(() => {}); });
+  } else {
+    el.alt = ''; el.src = src;
+  }
+  box.replaceChildren(el);
+  box.className = 'ov pos-' + pos;
+  requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('show')));
 }
 
 function hello() { post({ t: 'hello', ready: { A: !!ready.A, B: !!ready.B }, activated }); }
