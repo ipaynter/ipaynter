@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v4.1.0 — 2026-10-12 — Mixtape mode, rock solid
-Commit: `pending`
+Commit: `51e5d83`
 - **Plays with no internet, like a mixtape:**
   - Add your writers' **song files** (MP3, M4A, AAC, WAV, OGG, FLAC, MP4, WEBM) with **♪ Song files**, or by dragging them in. They are kept in `data\media` and play with no internet at all.
   - YouTube songs still need the internet. With none, they are marked *needs internet* and skipped, and the show carries on with the files.
