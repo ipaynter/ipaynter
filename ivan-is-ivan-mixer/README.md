@@ -47,6 +47,14 @@ Every version reads the data of the versions before it. **Settings → Export ba
 5. In StreamYard, share the **Share tab** with *Also share tab audio*. Press **ON AIR** when you go live; that also starts a fresh "played" count.
 6. After the show: **Log & credits → Credits: this show → Copy**.
 
+## Song files: play with no internet (mixtape mode)
+
+- Click **♪ Song files** at the top of the list, or drag files in from File Explorer: MP3, M4A, AAC, WAV, OGG, FLAC, MP4 or WEBM, up to 1 GB each.
+- They are copied into `LateNightWithIvan\data\media` and play with **no internet at all**. A music-only file shows your logo on stream; a video file shows its video.
+- Name files `Writer - Title.mp3`, for example `Lance - Night Drive.mp3`, and the writer and title fill in by themselves.
+- A dragged video longer than a minute becomes a song; a shorter one becomes an overlay.
+- **Offline:** YouTube songs show *needs internet* and are skipped, and the show carries on with your files. When the internet comes back, YouTube songs play again.
+
 ## Adding music: just drag or paste the link
 
 - **A whole playlist:** paste a YouTube playlist link (`youtube.com/playlist?list=…`) and every song in it is added in order. Public or unlisted playlists only.
@@ -109,6 +117,16 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 - The top-bar light in the mixer shows its status. If it says **NOT OPEN**, click it to open the Share tab again. Songs resume where they were.
 - **Don't close the Share tab during the show.** The music plays from it.
 - **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead.
+
+**On stream (what the Share tab shows)**
+- **Name badge:** top left (default), top right or bottom left. It shows for the first 20 s of each song, always, or never, and stays off the lyrics.
+- **DJ bar:** both decks, time left, the crossfader and what's next, along the bottom of the stream. Key **B** turns it on and off. This is how viewers see the mixer and the video together.
+- **Logo:** yours, in the top corner.
+
+**Shut down and start again**
+- **⏻** (top right) saves everything, stops the music and closes the Share tab and the black window.
+- The **Mad World Studios** button brings it all back, with the same songs on the same decks at the same place.
+- Only one board runs at a time. If Chrome reopens an old tab, it says "already open", and **Use this tab instead** moves the board there.
 
 **Overlays: pictures and short videos over the music**
 - The **Overlays** strip sits under the decks. Add to it by:

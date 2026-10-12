@@ -10,6 +10,9 @@ Serves the mixer on http://localhost:8765 (this computer only) and:
   /api/channel?h=|c=       a creator's channel ID and profile picture
   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
   /api/playlist?list=<id>  the video IDs of a public or unlisted playlist, in order
+  /api/quit (POST)         shuts the server down (the DJ board's power button)
+  /api/media (POST)        stores a song file (plays with no internet) in data/media
+  /media/<name>            serves a song file (with seeking)
   /api/overlay (POST)      stores a picture or short video for the share page (data/overlays)
   /overlay/<name>          serves a stored overlay
 """
@@ -30,7 +33,13 @@ from urllib.parse import urlparse, parse_qs
 PORT = 8765
 ROOT = os.path.dirname(os.path.abspath(__file__))
 # Your data (songs, backups, overlays, Stream Deck key): the LNWI_DATA folder, else "data" here.
-DATA_DIR = os.path.abspath(os.environ.get("LNWI_DATA") or os.path.join(ROOT, "data"))
+_PARENT = os.path.dirname(ROOT)
+if os.environ.get("LNWI_DATA"):
+    DATA_DIR = os.path.abspath(os.environ["LNWI_DATA"])
+elif os.path.basename(_PARENT) == "LateNightWithIvan":  # installed: always the shared data folder
+    DATA_DIR = os.path.join(_PARENT, "data")
+else:
+    DATA_DIR = os.path.join(ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, "mixer-data.json")
 OVERLAY_DIR = os.path.join(DATA_DIR, "overlays")
@@ -42,6 +51,35 @@ MAX_OVERLAY = 100 * 1024 * 1024
 OVERLAY_MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
                 "mp4": "video/mp4", "webm": "video/webm"}
 OVERLAY_RE = re.compile(r"^/overlay/([a-f0-9]{24})\.(png|jpg|gif|webp|mp4|webm)$")
+MEDIA_DIR = os.path.join(DATA_DIR, "media")  # song files: these play with no internet
+MAX_MEDIA = 1024 * 1024 * 1024
+MEDIA_MIME = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "aac": "audio/aac", "wav": "audio/wav", "ogg": "audio/ogg",
+              "flac": "audio/flac", "mp4": "video/mp4", "webm": "video/webm"}
+MEDIA_RE = re.compile(r"^/media/([a-f0-9]{24})\.(mp3|m4a|aac|wav|ogg|flac|mp4|webm)$")
+RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def song_type(b):
+    """A song file's type, from its first bytes (never from its name)."""
+    if len(b) < 12:
+        return None
+    if b[:4] == b"RIFF" and b[8:12] == b"WAVE":
+        return "wav"
+    if b[:4] == b"OggS":
+        return "ogg"
+    if b[:4] == b"fLaC":
+        return "flac"
+    if b[:4] == b"\x1a\x45\xdf\xa3":
+        return "webm"
+    if b[4:8] == b"ftyp":
+        return "m4a" if b[8:12] in (b"M4A ", b"M4B ") else "mp4"
+    if b[:3] == b"ID3":
+        return "mp3"
+    if b[0] == 0xFF and (b[1] & 0xF6) == 0xF0:
+        return "aac"
+    if b[0] == 0xFF and (b[1] & 0xE0) == 0xE0:
+        return "mp3"
+    return None
 
 
 def media_type(b):
@@ -69,10 +107,11 @@ except OSError:
 MAX_BODY = 20 * 1024 * 1024
 KEEP_DAILY = 30
 
+KEY = ""
 if os.path.exists(KEY_FILE):
     with open(KEY_FILE) as f:
         KEY = f.read().strip()
-else:
+if not re.match(r"^[0-9a-f]{16}$", KEY):  # missing, empty or damaged: make a new one
     KEY = secrets.token_hex(8)
     with open(KEY_FILE, "w") as f:
         f.write(KEY)
@@ -103,6 +142,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def send_file(self, path, ctype):
+        """A file, or the part the browser asks for (so songs can be seeked). Parts are at most 4 MB."""
+        size = os.path.getsize(path)
+        start, end, status = 0, size - 1, 200
+        m = RANGE_RE.match(self.headers.get("Range", ""))
+        if m:
+            if m.group(1):
+                start = int(m.group(1))
+                if m.group(2):
+                    end = min(int(m.group(2)), size - 1)
+            elif m.group(2):
+                start = max(0, size - int(m.group(2)))
+            if start >= size:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            end = min(end, start + 4 * 1024 * 1024 - 1)
+            status = 206
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.end_headers()
+        with open(path, "rb") as fh:
+            fh.seek(start)
+            left = end - start + 1
+            while left > 0:
+                chunk = fh.read(min(65536, left))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                left -= len(chunk)
+
     def send_body(self, body, ctype, status=200):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
@@ -126,11 +203,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not self.host_ok():
             return
         path = urlparse(self.path).path
-        if path not in ("/api/save", "/api/overlay"):
+        if path not in ("/api/save", "/api/overlay", "/api/media", "/api/quit"):
             return self.send_error(404)
         # Custom header means other websites cannot send this (browser preflight blocks them).
         if self.headers.get("X-Key") != KEY:
             return self.send_json({"error": "bad key"}, 403)
+        if path == "/api/quit":
+            self.send_json({"ok": True})
+            print("Shut down from the DJ board. Bye!")
+            threading.Timer(0.3, lambda: os._exit(10)).start()
+            return
+        if path == "/api/media":
+            length = int(self.headers.get("Content-Length") or 0)
+            if length <= 0 or length > MAX_MEDIA:
+                return self.send_json({"error": "too big (1 GB max)"}, 400)
+            os.makedirs(MEDIA_DIR, exist_ok=True)
+            tmp = os.path.join(MEDIA_DIR, f"upload-{secrets.token_hex(8)}.part")
+            sha, head, left = hashlib.sha256(), b"", length
+            with open(tmp, "wb") as out:
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        break
+                    if len(head) < 16:
+                        head += chunk[:16 - len(head)]
+                    sha.update(chunk)
+                    out.write(chunk)
+                    left -= len(chunk)
+            kind = song_type(head)
+            if not kind:
+                os.remove(tmp)
+                return self.send_json({"error": "not a song file (MP3, M4A, AAC, WAV, OGG, FLAC, MP4 or WEBM)"}, 400)
+            name = sha.hexdigest()[:24] + "." + kind
+            dest = os.path.join(MEDIA_DIR, name)
+            if os.path.exists(dest):
+                os.remove(tmp)
+            else:
+                os.replace(tmp, dest)
+            return self.send_json({"name": name, "type": MEDIA_MIME[kind]})
         if path == "/api/overlay":
             length = int(self.headers.get("Content-Length") or 0)
             if length <= 0 or length > MAX_OVERLAY:
@@ -158,10 +268,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         tmp = DATA_FILE + ".tmp"
         with open(tmp, "wb") as f:
             f.write(body)
+        if os.path.exists(DATA_FILE):
+            shutil.copyfile(DATA_FILE, os.path.join(DATA_DIR, "mixer-data.prev.json"))
         os.replace(tmp, DATA_FILE)
+        # one backup per day: the first save of the day, so a bad save later that day can't overwrite it
         daily = os.path.join(DATA_DIR, f"backup-{datetime.date.today().isoformat()}.json")
-        with open(daily, "wb") as f:
-            f.write(body)
+        if not os.path.exists(daily):
+            with open(daily, "wb") as f:
+                f.write(body)
         for old in sorted(glob.glob(os.path.join(DATA_DIR, "backup-*.json")))[:-KEEP_DAILY]:
             os.remove(old)
         return self.send_json({"ok": True})
@@ -178,8 +292,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             f = os.path.join(OVERLAY_DIR, m.group(1) + "." + m.group(2))
             if not os.path.exists(f):
                 return self.send_error(404)
-            with open(f, "rb") as fh:
-                return self.send_body(fh.read(), OVERLAY_MIME[m.group(2)])
+            return self.send_file(f, OVERLAY_MIME[m.group(2)])
+        m = MEDIA_RE.match(path)
+        if m:
+            f = os.path.join(MEDIA_DIR, m.group(1) + "." + m.group(2))
+            if not os.path.exists(f):
+                return self.send_error(404)
+            return self.send_file(f, MEDIA_MIME[m.group(2)])
         if path == "/api/info":
             return self.send_json({"key": KEY, "version": VERSION})
         if path == "/api/poll":

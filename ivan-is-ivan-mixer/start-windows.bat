@@ -28,6 +28,7 @@ echo   Keep this window open during the show. Close it to stop the mixer.
 echo.
 call powershell -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%serve.ps1"
 set "RC=%ERRORLEVEL%"
+if "%RC%"=="10" exit /b 0
 >>"%LOG%" echo serve.ps1 finished, exit code %RC%
 if "%RC%"=="0" goto done
 echo.

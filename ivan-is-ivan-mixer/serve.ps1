@@ -8,6 +8,9 @@
 #   /api/channel?h=|c=       a creator's channel ID and profile picture
 #   /api/feed?c=<channelId>  a creator's latest uploads (YouTube's public RSS feed)
 #   /api/playlist?list=<id>  the video IDs of a public or unlisted playlist, in order
+#   /api/quit (POST)         shuts the server down (the DJ board's power button)
+#   /api/media (POST)        stores a song file (plays with no internet) in data\media
+#   /media/<name>            serves a song file (with seeking)
 #   /api/overlay (POST)      stores a picture or short video for the share page (data\overlays)
 #   /overlay/<name>          serves a stored overlay
 # Your data (songs, backups, overlays, Stream Deck key) lives in the folder named by
@@ -19,10 +22,61 @@ $port = 8765
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $sep = [IO.Path]::DirectorySeparatorChar
 if (-not $root.EndsWith($sep)) { $root += $sep }
-$dataDir = if ($env:LNWI_DATA) { [IO.Path]::GetFullPath($env:LNWI_DATA) } else { Join-Path $root 'data' }
+$parent = Split-Path $root.TrimEnd($sep) -Parent
+$dataDir = if ($env:LNWI_DATA) { [IO.Path]::GetFullPath($env:LNWI_DATA) }
+           elseif ((Split-Path $parent -Leaf) -eq 'LateNightWithIvan') { Join-Path $parent 'data' }   # installed: always the shared data folder
+           else { Join-Path $root 'data' }
 if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
 $dataFile = Join-Path $dataDir 'mixer-data.json'
 $overlayDir = Join-Path $dataDir 'overlays'
+$mediaDir = Join-Path $dataDir 'media'      # song files: these play with no internet
+$maxMedia = 1GB
+$mediaMime = @{ 'mp3' = 'audio/mpeg'; 'm4a' = 'audio/mp4'; 'aac' = 'audio/aac'; 'wav' = 'audio/wav'; 'ogg' = 'audio/ogg'; 'flac' = 'audio/flac'; 'mp4' = 'video/mp4'; 'webm' = 'video/webm' }
+# A song file's type, from its first bytes (never from its name).
+function Get-SongType([byte[]]$b) {
+    if ($b.Length -lt 12) { return $null }
+    $a4 = [Text.Encoding]::ASCII.GetString($b, 0, 4)
+    if ($a4 -eq 'RIFF' -and [Text.Encoding]::ASCII.GetString($b, 8, 4) -eq 'WAVE') { return 'wav' }
+    if ($a4 -eq 'OggS') { return 'ogg' }
+    if ($a4 -eq 'fLaC') { return 'flac' }
+    if ($b[0] -eq 0x1A -and $b[1] -eq 0x45 -and $b[2] -eq 0xDF -and $b[3] -eq 0xA3) { return 'webm' }
+    if ([Text.Encoding]::ASCII.GetString($b, 4, 4) -eq 'ftyp') {
+        $brand = [Text.Encoding]::ASCII.GetString($b, 8, 4)
+        if ($brand -eq 'M4A ' -or $brand -eq 'M4B ') { return 'm4a' } else { return 'mp4' }
+    }
+    if ([Text.Encoding]::ASCII.GetString($b, 0, 3) -eq 'ID3') { return 'mp3' }
+    if ($b[0] -eq 0xFF -and ($b[1] -band 0xF6) -eq 0xF0) { return 'aac' }
+    if ($b[0] -eq 0xFF -and ($b[1] -band 0xE0) -eq 0xE0) { return 'mp3' }
+    return $null
+}
+# Sends a file, or the part of it the browser asks for (so songs can be seeked).
+# Parts are at most 4 MB, so one long song never blocks the server for long.
+function Send-File($req, $res, [string]$file, [string]$type) {
+    $fs = [IO.File]::OpenRead($file)
+    try {
+        $len = $fs.Length; $start = 0; $end = $len - 1; $status = 200
+        $range = $req.Headers['Range']
+        if ($range -match '^bytes=(\d*)-(\d*)$') {
+            if ($Matches[1] -ne '') { $start = [int64]$Matches[1]; if ($Matches[2] -ne '') { $end = [Math]::Min([int64]$Matches[2], $len - 1) } }
+            elseif ($Matches[2] -ne '') { $start = [Math]::Max(0, $len - [int64]$Matches[2]) }
+            if ($start -ge $len) { $res.StatusCode = 416; $res.Headers.Add('Content-Range', "bytes */$len"); $res.Close(); return }
+            $end = [Math]::Min($end, $start + 4MB - 1)
+            $status = 206
+            $res.Headers.Add('Content-Range', "bytes $start-$end/$len")
+        }
+        $res.StatusCode = $status
+        $res.ContentType = $type
+        $res.Headers.Add('Accept-Ranges', 'bytes')
+        $res.Headers.Add('X-Content-Type-Options', 'nosniff')
+        $res.ContentLength64 = $end - $start + 1
+        [void]$fs.Seek($start, 'Begin')
+        $buf = New-Object byte[] 65536; $left = $end - $start + 1
+        while ($left -gt 0) {
+            $n = $fs.Read($buf, 0, [int][Math]::Min($buf.Length, $left)); if ($n -le 0) { break }
+            $res.OutputStream.Write($buf, 0, $n); $left -= $n
+        }
+    } finally { $fs.Close(); try { $res.Close() } catch {} }
+}
 $maxBody = 20MB
 $maxOverlay = 100MB
 # Overlays: the type is decided by the file's first bytes, never by its name.
@@ -67,14 +121,14 @@ function Open-Mixer {
 
 $version = 'unknown'
 $versionFile = Join-Path $root 'VERSION'
-if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
+if (Test-Path $versionFile) { $version = "$(Get-Content $versionFile -Raw)".Trim(); if (-not $version) { $version = 'unknown' } }
 
 $keyFile = Join-Path $dataDir 'control-key.txt'
 $oldKey = Join-Path $root 'control-key.txt'   # versions before 4.0 kept it next to the app
 if (-not (Test-Path $keyFile) -and (Test-Path $oldKey)) { Copy-Item -LiteralPath $oldKey -Destination $keyFile }
-if (Test-Path $keyFile) {
-    $key = (Get-Content $keyFile -Raw).Trim()
-} else {
+$key = ''
+if (Test-Path $keyFile) { $key = "$(Get-Content $keyFile -Raw)".Trim() }
+if ($key -notmatch '^[0-9a-f]{16}$') {   # missing, empty or damaged: make a new one
     $bytes = New-Object byte[] 8
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $key = -join ($bytes | ForEach-Object { $_.ToString('x2') })
@@ -105,13 +159,16 @@ function Send-Json($res, $json, $status = 200) {
 }
 
 # Fetch a youtube.com page. Only called with URLs built from validated IDs.
+# Gives up after 10 seconds, so a slow YouTube never freezes the board (this server answers one request at a time).
 function Get-YouTube([string]$url) {
-    $wc = New-Object System.Net.WebClient
-    $wc.Encoding = [Text.Encoding]::UTF8
-    $wc.Headers.Add('User-Agent', 'Mozilla/5.0 (LateNightWithIvan)')
-    $wc.Headers.Add('Accept-Language', 'en')
-    $wc.Headers.Add('Cookie', 'CONSENT=YES+1; SOCS=CAI')
-    try { return $wc.DownloadString($url) } finally { $wc.Dispose() }
+    $rq = [Net.HttpWebRequest]::Create($url)
+    $rq.Timeout = 10000; $rq.ReadWriteTimeout = 10000
+    $rq.UserAgent = 'Mozilla/5.0 (LateNightWithIvan)'
+    $rq.Headers.Add('Accept-Language', 'en')
+    $rq.Headers.Add('Cookie', 'CONSENT=YES+1; SOCS=CAI')
+    $resp = $rq.GetResponse()
+    $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+    try { return $sr.ReadToEnd() } finally { $sr.Close(); $resp.Close() }
 }
 
 Write-Log "serve.ps1 starting: mixer v$version, PowerShell $($PSVersionTable.PSVersion)"
@@ -122,15 +179,21 @@ try { $listener.Start() } catch {
     Write-Log "Listener could not start: $why"
     # Already running (e.g. a second double-click)? Then just open it.
     $running = $null
-    try { $running = Invoke-RestMethod -Uri ($url + 'api/info') -TimeoutSec 3 } catch {}
+    for ($try = 1; $try -le 3 -and -not $running; $try++) {
+        try { $running = Invoke-RestMethod -Uri ($url + 'api/info') -TimeoutSec 4 } catch { Start-Sleep -Milliseconds 500 }
+    }
     if ($running -and $running.version -and $running.version -ne $version) {
         # An OLDER (or different) mixer is still running from another folder. Stop it, then start this one.
         Write-Host "An older mixer (v$($running.version)) is still running. Closing it and starting v$version..." -ForegroundColor Yellow
         Write-Log "Different version running (v$($running.version)); stopping it"
         $old = @()
         try {
-            $old = @(Get-CimInstance Win32_Process -ErrorAction Stop |
-                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'serve\.ps1|serve\.py' } | ForEach-Object { $_.ProcessId })
+            $all = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+            $mine = ($all | Where-Object { $_.ProcessId -eq $PID }).ParentProcessId
+            $srv = @($all | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'serve\.ps1|serve\.py' })
+            # also its black window (the start-windows.bat that ran it), but never our own
+            $win = @($all | Where-Object { ($srv.ParentProcessId -contains $_.ProcessId) -and $_.ProcessId -ne $mine -and $_.CommandLine -match 'start-windows\.bat' })
+            $old = @($win.ProcessId) + @($srv.ProcessId)
         } catch {
             # no CIM (PowerShell 7 off Windows): Process.CommandLine works there instead
             $old = @(Get-Process | Where-Object { $_.Id -ne $PID -and $_.CommandLine -match 'serve\.ps1|serve\.py' } | ForEach-Object { $_.Id })
@@ -177,9 +240,39 @@ try {
             $path = [Uri]::UnescapeDataString($req.Url.AbsolutePath)
 
             if ($req.HttpMethod -eq 'POST') {
-                if ($path -ne '/api/save' -and $path -ne '/api/overlay') { Send-Json $res '{"error":"not found"}' 404; continue }
+                if (@('/api/save', '/api/overlay', '/api/media', '/api/quit') -notcontains $path) { Send-Json $res '{"error":"not found"}' 404; continue }
                 # Custom header means other websites cannot send this (browser preflight blocks them).
                 if ($req.Headers['X-Key'] -ne $key) { Send-Json $res '{"error":"bad key"}' 403; continue }
+                if ($path -eq '/api/quit') {
+                    Send-Json $res '{"ok":true}'
+                    Write-Host 'Shut down from the DJ board. Bye!' -ForegroundColor Cyan
+                    Write-Log 'Shut down from the DJ board'
+                    $script:quit = $true; break
+                }
+                if ($path -eq '/api/media') {
+                    # a song file, streamed to disk (they can be big), named by its fingerprint so it is never stored twice
+                    if ($req.ContentLength64 -le 0 -or $req.ContentLength64 -gt $maxMedia) { Send-Json $res '{"error":"too big (1 GB max)"}' 400; continue }
+                    if (-not (Test-Path $mediaDir)) { New-Item -ItemType Directory -Path $mediaDir | Out-Null }
+                    $tmpF = Join-Path $mediaDir ('upload-' + [guid]::NewGuid().ToString('N') + '.part')
+                    $sha = [Security.Cryptography.SHA256]::Create(); $head = New-Object byte[] 16; $got = 0
+                    $out = [IO.File]::Create($tmpF)
+                    try {
+                        $buf = New-Object byte[] 65536
+                        while (($n = $req.InputStream.Read($buf, 0, $buf.Length)) -gt 0) {
+                            if ($got -lt 16) { [Array]::Copy($buf, 0, $head, $got, [Math]::Min(16 - $got, $n)) }
+                            $got += $n
+                            [void]$sha.TransformBlock($buf, 0, $n, $null, 0)
+                            $out.Write($buf, 0, $n)
+                        }
+                        [void]$sha.TransformFinalBlock($buf, 0, 0)
+                    } finally { $out.Close() }
+                    $kind = Get-SongType $head
+                    if (-not $kind) { Remove-Item -LiteralPath $tmpF -Force; Send-Json $res '{"error":"not a song file (MP3, M4A, AAC, WAV, OGG, FLAC, MP4 or WEBM)"}' 400; continue }
+                    $name = (-join ($sha.Hash[0..11] | ForEach-Object { $_.ToString('x2') })) + ".$kind"
+                    $dest = Join-Path $mediaDir $name
+                    if (Test-Path $dest) { Remove-Item -LiteralPath $tmpF -Force } else { Move-Item -LiteralPath $tmpF -Destination $dest }
+                    Send-Json $res ('{"name":"' + $name + '","type":"' + $mediaMime[$kind] + '"}'); continue
+                }
                 if ($path -eq '/api/overlay') {
                     if ($req.ContentLength64 -le 0 -or $req.ContentLength64 -gt $maxOverlay) { Send-Json $res '{"error":"too big (100 MB max)"}' 400; continue }
                     $ms = New-Object IO.MemoryStream
@@ -201,9 +294,11 @@ try {
                 if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
                 $tmp = "$dataFile.tmp"
                 [IO.File]::WriteAllText($tmp, $body, $utf8)
+                if (Test-Path $dataFile) { Copy-Item -LiteralPath $dataFile -Destination (Join-Path $dataDir 'mixer-data.prev.json') -Force }
                 Move-Item -LiteralPath $tmp -Destination $dataFile -Force
+                # one backup per day: the first save of the day, so a bad save later that day can't overwrite it
                 $daily = Join-Path $dataDir ('backup-' + (Get-Date -Format 'yyyy-MM-dd') + '.json')
-                [IO.File]::WriteAllText($daily, $body, $utf8)
+                if (-not (Test-Path $daily)) { [IO.File]::WriteAllText($daily, $body, $utf8) }
                 Get-ChildItem -Path $dataDir -Filter 'backup-*.json' | Sort-Object Name -Descending |
                     Select-Object -Skip $keepDaily | Remove-Item -Force
                 Send-Json $res '{"ok":true}'; continue
@@ -211,7 +306,13 @@ try {
 
             if ($path -match '^/overlay/([a-f0-9]{24})\.(png|jpg|gif|webp|mp4|webm)$') {
                 $f = Join-Path $overlayDir "$($Matches[1]).$($Matches[2])"
-                if (Test-Path -LiteralPath $f) { Send-Bytes $res ([IO.File]::ReadAllBytes($f)) $overlayMime[$Matches[2]] }
+                if (Test-Path -LiteralPath $f) { Send-File $req $res $f $overlayMime[$Matches[2]] }
+                else { Send-Bytes $res ($utf8.GetBytes('Not found')) 'text/plain' 404 }
+                continue
+            }
+            if ($path -match '^/media/([a-f0-9]{24})\.(mp3|m4a|aac|wav|ogg|flac|mp4|webm)$') {
+                $f = Join-Path $mediaDir "$($Matches[1]).$($Matches[2])"
+                if (Test-Path -LiteralPath $f) { Send-File $req $res $f $mediaMime[$Matches[2]] }
                 else { Send-Bytes $res ($utf8.GetBytes('Not found')) 'text/plain' 404 }
                 continue
             }
@@ -294,3 +395,4 @@ try {
 } finally {
     $listener.Stop()
 }
+if ($script:quit) { exit 10 }   # 10 = shut down on purpose: start-windows.bat closes its window

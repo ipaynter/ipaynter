@@ -402,3 +402,16 @@ body.staged .stage-ctrl { display: flex; }
 .ov-opts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .ov-opts select { font-size: 12px; padding: 4px; }
 .ov-url { width: 150px; font-size: 12px; }
+
+/* ---------- brand ---------- */
+.brand-logo { width: 30px; height: 30px; filter: drop-shadow(0 0 6px rgba(255, 50, 50, .35)); }
+.splash-logo { width: 190px; height: 190px; display: block; margin: 0 auto 12px; filter: drop-shadow(0 0 30px rgba(255, 50, 50, .35)); }
+.mws { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--dim); font-size: 12px; letter-spacing: 1px; margin-top: 18px; }
+.mws img { width: 34px; height: 34px; }
+.pill-btn.quit:hover { border-color: var(--red); color: var(--red); }
+.stream-opts { flex-basis: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 7px; }
+.stream-opts b { color: var(--text); font-size: 13px; }
+.stream-opts select { font-size: 12px; padding: 3px 4px; }
+.bye { min-height: 100vh; display: grid; place-content: center; text-align: center; gap: 6px; color: var(--dim); }
+.bye img { width: 160px; margin: 0 auto 10px; } .bye h1 { color: var(--text); letter-spacing: 4px; margin: 0 0 10px; } .bye em { color: var(--b); font-weight: 300; }
+.filetag { color: var(--green); font-weight: 600; }

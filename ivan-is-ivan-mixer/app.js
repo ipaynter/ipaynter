@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '4.0.0';
+const APP_VERSION = '4.1.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -18,7 +18,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#8a95a8');
-const thumb = vid => `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+// song files (no internet needed) have no YouTube picture: they show the show's logo
+const thumb = vid => (String(vid).startsWith('file:') ? 'logo-ivan.png' : `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`);
+const isFileSong = t => !!t?.file;
 const today = () => new Date().toISOString().slice(0, 10);
 // Only YouTube-hosted pictures or pictures you uploaded (stored inside the app) are ever shown.
 const safeImg = u => (/^https:\/\/(yt3\.ggpht\.com|yt3\.googleusercontent\.com|i\.ytimg\.com)\/[\w\-./=~%?&]+$/.test(u || '') ||
@@ -83,7 +85,8 @@ function parseVideoId(input) {
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) {
-    try { localStorage.setItem(k, JSON.stringify(v)); } catch { toast('Could not save in Chrome — the disk copy still works', 'bad'); }
+    if (S.shutting) return;
+    try { localStorage.setItem(k, JSON.stringify(v)); localStorage.setItem('iii.localAt', String(Date.now())); } catch { toast('Could not save in Chrome — the disk copy still works', 'bad'); }
     Disk.schedule();
   }
 };
@@ -96,12 +99,14 @@ const S = {
   creators: store.get('iii.creators', []),   // [{id, name, channelId, color}]
   inbox: store.get('iii.inbox', []),         // new uploads waiting for approval
   ignored: store.get('iii.ignored', []),     // video IDs dismissed from the inbox
-  overlays: store.get('iii.overlays', []),   // pictures / short videos for the share page [{id, kind, src, name}]
+  overlays: store.get('iii.overlays', []),
+  session: store.get('iii.session', null),     // what was on the decks, so a restart picks up where you left off   // pictures / short videos for the share page [{id, kind, src, name}]
   cfg: Object.assign({
     fadeSec: 8, curve: 'smooth', master: 90, duckLevel: 25, approvedOnly: true,
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
     snapBars: true, smartFill: true, viewerTab: true, deckVideo: true, mode: 'assist',
-    ovPos: 'big', ovSecs: 10, ovSound: false
+    ovPos: 'big', ovSecs: 10, ovSound: false,
+    badgePos: 'tl', badgeMode: 'start', djBar: true, logoBug: true
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
@@ -127,28 +132,39 @@ Object.entries(KEYS).forEach(([name, key]) => { save[name] = () => store.set(key
    so clearing Chrome's data can never wipe the library. */
 const Disk = {
   ok: false, key: null, timer: null,
-  schedule() { if (!this.ok) return; this.dirty = true; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 400); },
+  schedule() { if (!this.ok || S.shutting) return; this.dirty = true; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 400); },
   snapshot() {
-    const o = { app: 'ivan-is-ivan-mixer', version: DATA_VERSION, appVersion: APP_VERSION, savedAt: new Date().toISOString() };
+    // savedAt = when the data last changed (not when it was sent), so copies can be compared
+    const o = { app: 'ivan-is-ivan-mixer', version: DATA_VERSION, appVersion: APP_VERSION, savedAt: new Date(+localStorage.getItem('iii.localAt') || Date.now()).toISOString() };
     Object.keys(KEYS).forEach(k => { o[k] = S[k]; });
+    o.session = sessionNow();
     return o;
   },
   pill(ok, text) { const p = $('#diskStatus'); p.textContent = text; p.className = 'pill ' + (ok ? 'ok' : 'bad'); },
   async push(closing = false) {
     this.dirty = false;
     try {
-      const r = await fetch('/api/save', { method: 'POST', keepalive: closing, headers: { 'Content-Type': 'application/json', 'X-Key': this.key }, body: JSON.stringify(this.snapshot()) });
+      const body = JSON.stringify(this.snapshot());
+      // Chrome refuses "send while closing" above 64 KB; Chrome's own copy is then pushed on the next start
+      if (closing && body.length > 60000) { this.dirty = true; return false; }
+      const r = await fetch('/api/save', { method: 'POST', keepalive: closing, headers: { 'Content-Type': 'application/json', 'X-Key': this.key }, body });
       if (!r.ok) throw new Error(r.status);
       this.pill(true, 'Disk: saved ✓');
-    } catch { this.pill(false, 'Disk: NOT saved'); }
+      return true;
+    } catch { this.dirty = true; this.pill(false, 'Disk: NOT saved'); return false; }
   },
+  // Chrome's copy is used unless it is empty or older than the disk copy
+  // (e.g. Chrome's data was cleared, or a different Chrome profile opened the board).
   async restoreIfEmpty() {
-    if (S.library.length) return false;
     try {
       const r = await fetch('/api/load', { cache: 'no-store' });
       if (!r.ok) return false;
       const d = await r.json();
       if (!Array.isArray(d.library) || !d.library.length) return false;
+      const localAt = +localStorage.getItem('iii.localAt') || 0, diskAt = Date.parse(d.savedAt || '') || 0;
+      this.diskAt = diskAt;
+      if (S.library.length && !(diskAt > localAt + 5000 && d.library.length >= S.library.length)) return false;
+      if (d.session && !S.session) { S.session = d.session; }
       Object.keys(KEYS).forEach(k => {
         if (k === 'cfg') { if (d.cfg && typeof d.cfg === 'object') Object.assign(S.cfg, d.cfg); }
         else if (Array.isArray(d[k])) S[k] = d[k];
@@ -307,12 +323,15 @@ function viewerLost() {
 
 if (Bus.ch) Bus.ch.onmessage = e => {
   const m = e.data || {};
-  if (!S.cfg.viewerTab) return;
+  if (!S.cfg.viewerTab || !decks.A || S.shutting) return;   // a board that isn't running (or was replaced) stays silent
   if (m.t === 'bye') { if (m.vid === Bus.instance) viewerLost(); return; }
   // A different Share tab than before (reopened or reloaded): start it fresh.
+  // While the current one is still alive, an extra one is put on standby instead.
   if (m.vid && m.vid !== Bus.instance) {
+    if (Bus.instance && Bus.connected && Date.now() - Bus.lastSeen < 2500) { Bus.send({ t: 'standby', to: m.vid }); return; }
     if (Bus.instance) viewerLost();
     Bus.instance = m.vid;
+    Bus.send({ t: 'active', to: m.vid });
     if (m.t !== 'hello') Bus.send({ t: 'ping' }); // ask the new tab which players are ready
   }
   Bus.lastSeen = Date.now();
@@ -466,7 +485,7 @@ class Deck {
       return;
     }
     if (!this.mirrorReady) return;
-    const m = this.mirror, vid = this.track?.videoId || null;
+    const m = this.mirror, vid = this.track && !isFileSong(this.track) ? this.track.videoId : null;
     if (vid !== this.mirrorVid) {
       this.mirrorVid = vid; this.mirrorBad = false;
       if (vid) m.cueVideoById({ videoId: vid, startSeconds: this.time || this.cuePoint || 0 }); else m.stopVideo?.();
@@ -489,7 +508,8 @@ class Deck {
   // After the Share tab (re)connects: carry on from where this song was.
   resume() {
     const midSong = this.played && !this.finished && this.time > 0;
-    const o = { videoId: this.track.videoId, startSeconds: midSong ? this.time : (this.cuePoint || 0) };
+    const o = { videoId: this.track.videoId, startSeconds: this.resumeAt ?? (midSong ? this.time : (this.cuePoint || 0)) };
+    this.resumeAt = null;
     this.lastVol = -1; applyVolumes();
     if (this.wantPlay) this.player.loadVideoById(o); else this.player.cueVideoById(o);
   }
@@ -506,6 +526,9 @@ class Deck {
 
   load(track, autoplay = false, auto = false) {
     if (!track) return;
+    if (isFileSong(track) && !S.cfg.viewerTab) { toast('Song files play in the Share tab — switch it on in Settings', 'bad'); return; }
+    if (this.resumeFor !== track.id) this.resumeAt = null; // a resume position only applies to the song it was saved for
+    this.resumeFor = null;
     const o = other(this);
     if (o && o.track?.id === track.id && !o.isPlaying()) o.eject();
     this.track = track;
@@ -532,7 +555,8 @@ class Deck {
   }
 
   cueCurrent(autoplay) {
-    const o = { videoId: this.track.videoId, startSeconds: this.cuePoint || 0 };
+    const o = { videoId: this.track.videoId, startSeconds: this.resumeAt ?? (this.cuePoint || 0) };
+    this.resumeAt = null;
     this.lastVol = -1;
     applyVolumes();
     if (autoplay) this.player.loadVideoById(o); else this.player.cueVideoById(o);
@@ -659,22 +683,15 @@ class Deck {
     if (!raw) { this.r.url.focus(); return; }
     const vid = parseVideoId(raw);
     if (!vid) { toast('That is not a YouTube link', 'bad'); return; }
-    let t = byVid(vid);
-    if (!t) {
-      if (S.cfg.approvedOnly) {
-        ask('This song is not in your approved library yet. Add it (you have the creator\'s permission) and load it?', 'Add & load')
-          .then(ok => { if (ok) { const [nt] = ingestLinks('https://youtu.be/' + vid); if (nt) this.userLoad(nt); } });
-        return;
-      }
-      t = { id: 'tmp-' + vid, videoId: vid, title: '', artist: '', license: 'NOT IN LIBRARY' };
-    }
-    this.userLoad(t);
+    // every song you add is one you have permission for: it goes on the list and onto this deck
+    const t = byVid(vid) || ingestLinks('https://youtu.be/' + vid)[0];
+    if (t) { this.userLoad(t); renderQueue(); }
   }
   async act_next() {
-    if (!S.queue.length) { toast('Queue is empty — try Smart Next'); return; }
-    if (this.onAirNow() && !(await ask(`Deck ${this.id} is ON AIR. Replace it with the next queued song?`, 'Replace'))) return;
+    if (!nextInList()) { toast('Nothing left to play in the list'); return; }
+    if (this.onAirNow() && !(await ask(`Deck ${this.id} is ON AIR. Replace it with the next song?`, 'Replace'))) return;
     const t = dequeue();
-    if (t) this.load(t);
+    if (t) { this.load(t); renderQueue(); }
   }
 
   hotcue(i, clear) {
@@ -717,12 +734,16 @@ class Deck {
     const why = {
       2: 'bad video ID', 5: 'player error', 100: 'video removed or private',
       101: 'owner does not allow embedding', 150: 'owner does not allow embedding',
-      153: 'player blocked — start the mixer with the start script, not as a file'
+      153: 'player blocked — start the mixer with the start script, not as a file',
+      offline: 'no internet — YouTube songs are skipped, song files keep playing',
+      file: 'this song file could not be played'
     }[code] || ('YouTube error ' + code);
     toast(`Deck ${this.id}: ${why}`, 'bad');
     const was = this.wantPlay;
     this.errored = true; this.finished = true; this.wantPlay = false;
-    if (inLib(this.track)) { this.track.flag = why; save.library(); renderLibrary(); }
+    if (code === 'offline') { S.ytOffline = true; renderQueue(); }
+    // only a lasting problem marks the song ⚠ (not "no internet right now")
+    if (inLib(this.track) && [100, 101, 150, 'file'].includes(code)) { this.track.flag = why; save.library(); renderLibrary(); }
     this.render();
     if (S.autoDJ && was) onDeckEnded(this);
   }
@@ -884,6 +905,7 @@ const Probe = {
 };
 
 function probeLength(t) {
+  if (isFileSong(t)) { if (!t.duration) fileLength(t); return; }
   if (!S.ytReady || t.duration) return;
   Probe.get(t.videoId).then(p => {
     if (p?.duration) {
@@ -932,7 +954,9 @@ function playNext() {
   const live = liveDeck(), free = other(live);
   const anyPlaying = live.isPlaying() || free.isPlaying();
   if (!anyPlaying) {
-    const d = free.track && !free.played && !free.errored ? free : live;
+    // nothing on air yet: the first song is the one on the live deck (then the other deck, then the list)
+    const fresh = d => d.track && !d.played && !d.errored;
+    const d = fresh(live) ? live : fresh(free) ? free : live;
     if (!d.track || d.played || d.errored) { const t = dequeue(); if (!t) { toast('The list is empty — add a song', 'bad'); return; } d.load(t, true); }
     setXf(d.id === 'A' ? 0 : 1);
     d.play(); renderAll(); renderQueue();
@@ -948,8 +972,9 @@ function playNext() {
 
 // Click a song in the list: cue it as "up next" on the free deck.
 async function cueNext(t) {
-  const free = other(liveDeck());
-  const d = free.isPlaying() && !liveDeck().isPlaying() ? liveDeck() : free;
+  const live = liveDeck(), free = other(live);
+  // nothing playing: it becomes the first song (live deck); otherwise it waits on the free deck
+  const d = !live.isPlaying() && !free.isPlaying() ? live : free.isPlaying() && !live.isPlaying() ? live : free;
   if (await d.userLoad(t)) { renderQueue(); toast(`Up next: "${t.title || t.videoId}" — press ▶ Play next`); }
 }
 
@@ -959,9 +984,14 @@ function playedThisShow() {
   return new Set(S.history.filter(h => h.at >= since).map(h => h.videoId));
 }
 function onDeckIds() { return new Set([decks.A?.track?.id, decks.B?.track?.id].filter(Boolean)); }
+// No internet when the board opened: YouTube songs are skipped straight away (song files still play).
+window.ytApiFailed = () => { S.ytOffline = true; if (decks.A) renderQueue(); };
+// YouTube songs need the internet; song files always play (mixtape mode).
+const ytOnline = () => navigator.onLine !== false && !S.ytOffline;
+const playable = t => isFileSong(t) || ytOnline();
 function nextInList() {
   const played = playedThisShow(), busy = onDeckIds();
-  return S.library.find(t => !t.flag && !played.has(t.videoId) && !busy.has(t.id)) || null;
+  return S.library.find(t => !t.flag && playable(t) && !played.has(t.videoId) && !busy.has(t.id)) || null;
 }
 function dequeue() {
   S.lastAuto = false;
@@ -1113,7 +1143,7 @@ function suggest(n = 3, { creatorId = null, only = null } = {}) {
   const total = Object.values(st).reduce((a, x) => a + x.secs, 0);
   const pct = v => Math.round(v * 100) + '%';
   return S.library
-    .filter(t => !t.flag && (only ? only.has(t.id) : (!t.noAuto && !S.skip.has(t.videoId))) && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
+    .filter(t => !t.flag && playable(t) && (only ? only.has(t.id) : (!t.noAuto && !S.skip.has(t.videoId))) && !busy.has(t.id) && (!creatorId || creatorOf(t)?.id === creatorId))
     .map(t => {
       let score = jitter(t.videoId);
       const why = [];
@@ -1459,6 +1489,58 @@ function toggleFullscreen() {
 }
 
 let lastDisplay = '', lastDisplayAt = 0;
+// Name badge: for the first 20 s of each song (and while mixing), always, or never.
+function badgeVisible(main) {
+  if (S.cfg.badgeMode === 'off') return false;
+  if (S.cfg.badgeMode === 'always') return true;
+  return S.transitioning || !main.isPlaying() || main.time - (main.cuePoint || 0) < 20;
+}
+// The DJ bar on the stream: both decks, time left, crossfader, what's next.
+function barMsg(main) {
+  const deck = d => {
+    const t = d.track;
+    if (!t || d.errored) return {};
+    return { title: t.title || t.videoId, artist: artistOf(t), thumb: thumb(t.videoId), rem: Math.ceil(d.remaining()), pct: d.dur ? +(d.time / d.dur).toFixed(3) : 0, live: d === main && d.isPlaying() };
+  };
+  const o = other(main);
+  const nxt = o.track && !o.played && !o.errored ? o.track : nextInList();
+  const bpm = ['A', 'B'].map(id => decks[id].track?.bpm ? `${id} ${Math.round(decks[id].track.bpm)}` : '').filter(Boolean).join('  ·  ');
+  return { A: deck(decks.A), B: deck(decks.B), xf: +S.xf.toFixed(2), next: nxt ? `${nxt.title || nxt.videoId} — ${artistOf(nxt)}` : '', bpm: bpm ? bpm + ' BPM' : '' };
+}
+
+/* ---------------- session: pick up where you left off after a restart ---------------- */
+
+function sessionNow() {
+  const d = x => (x.track ? { id: x.track.id, t: Math.round(x.time || 0), played: !!x.played } : null);
+  return { A: d(decks.A), B: d(decks.B), xf: +S.xf.toFixed(3), at: Date.now() };
+}
+let sessionSig = '';
+function saveSession() {
+  if (!decks.A) return;
+  const s = sessionNow(), sig = JSON.stringify({ ...s, at: 0 });
+  if (sig === sessionSig) return;
+  sessionSig = sig; S.session = s;
+  try { localStorage.setItem('iii.session', JSON.stringify(s)); } catch { /* full */ }
+}
+function resumeSession() {
+  const s = S.session;
+  if (!s || decks.A.track || decks.B.track || Date.now() - (s.at || 0) > 24 * 3600e3) return;
+  const names = [];
+  for (const id of ['A', 'B']) {
+    const v = s[id], t = v && byId(v.id);
+    if (!t) continue;
+    const d = decks[id];
+    const at = v.t > 1 && (!t.duration || v.t < t.duration - 2) ? v.t : null;
+    d.resumeAt = at; d.resumeFor = t.id;   // set first: load() cues straight away if the player is ready
+    d.load(t);
+    if (at != null) d.time = at;
+    names.push(`${id}: ${t.title || t.videoId}`);
+  }
+  if (typeof s.xf === 'number') { S.xf = clamp(s.xf, 0, 1); syncXfUI(); applyVolumes(); }
+  if (names.length) toast(`Back where you left off — ${names.join(' · ')}. Press ▶ to carry on.`, 'good');
+  renderQueue();
+}
+
 function sendDisplay() {
   const A = decks.A, B = decks.B, pa = A.isPlaying(), pb = B.isPlaying();
   let wa = 1 - S.xf;
@@ -1468,8 +1550,10 @@ function sendDisplay() {
   const msg = {
     t: 'display',
     A: { op: +opA.toFixed(2), top: wa >= 0.5 }, B: { op: +opB.toFixed(2), top: wa < 0.5 },
-    badge: t && !main.errored ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')) } : null,
-    ov: overlayMsg()
+    badge: t && !main.errored && badgeVisible(main) ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')), pos: S.cfg.badgePos } : null,
+    ov: overlayMsg(),
+    bar: S.cfg.djBar ? barMsg(main) : null,
+    logo: !!S.cfg.logoBug
   };
   const sig = JSON.stringify(msg);
   if (sig === lastDisplay && Date.now() - lastDisplayAt < 2000) return;
@@ -1555,7 +1639,33 @@ function renderOverlays() {
   }).join('') || '<span class="ov-empty">Drag pictures or short videos here (from your computer or the web)</span>';
   $('#ovHide')?.classList.toggle('hidden', !S.ovOn);
 }
+// Shut down: save everything, stop the music, close the Share tab and the black window.
+async function shutDown() {
+  if (!(await ask('Shut down the DJ board? Everything is saved, and the desktop button brings it all back where you left it.', 'Shut down'))) return;
+  S.shutting = true; saveSession();
+  Object.values(decks).forEach(d => { try { if (d.isPlaying()) d.pause(); } catch { /* fine */ } });
+  Bus.send({ t: 'quit' });
+  S.shutting = false; const saved = Disk.ok ? (clearTimeout(Disk.timer), await Disk.push()) : false; S.shutting = true;
+  try { await fetch('/api/quit', { method: 'POST', headers: { 'X-Key': Disk.key || '', 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* already stopped */ }
+  window.onbeforeunload = null;
+  document.body.innerHTML = `<div class="bye"><img src="logo-ivan.png" alt=""><h1>LATE NIGHT <em>with</em> IVAN</h1><p>${saved ? 'Shut down. Everything is saved.' : 'Shut down. Your songs are kept in Chrome (the disk copy could not be written).'}</p><p>Close this tab. Start again with the <b>Mad World Studios</b> button.</p></div>`;
+  setTimeout(() => window.close(), 300);
+}
+
+function setStreamOpt(k, v) {
+  S.cfg[k] = v; save.cfg(); syncStreamUI(); sendDisplay();
+}
+function syncStreamUI() {
+  if (!$('#badgePos')) return;
+  $('#badgePos').value = S.cfg.badgePos; $('#badgeMode').value = S.cfg.badgeMode;
+  $('#djBarOn').checked = !!S.cfg.djBar; $('#logoOn').checked = !!S.cfg.logoBug;
+}
 function initOverlayUI() {
+  $('#badgePos').onchange = e => setStreamOpt('badgePos', e.target.value);
+  $('#badgeMode').onchange = e => setStreamOpt('badgeMode', e.target.value);
+  $('#djBarOn').onchange = e => setStreamOpt('djBar', e.target.checked);
+  $('#logoOn').onchange = e => setStreamOpt('logoBug', e.target.checked);
+  syncStreamUI();
   const list = $('#ovList');
   list.addEventListener('click', async e => {
     const item = e.target.closest('[data-ov]'); if (!item) return;
@@ -1671,9 +1781,13 @@ const Remote = {
     renderKeys(); renderVersion();
     if (this.ok) {
       Disk.ok = true; Disk.key = this.key;
-      if (await Disk.restoreIfEmpty()) renderEverything();
-      Disk.push();
-    } else Disk.pill(false, 'Disk: off (no start script)');
+      const restored = await Disk.restoreIfEmpty();
+      if (restored) renderEverything();
+      resumeSession();
+      // send Chrome's copy to disk only if it has changes the disk copy doesn't
+      if (!restored && (+localStorage.getItem('iii.localAt') || 0) > (Disk.diskAt || 0) + 1000) Disk.push();
+      else Disk.pill(true, 'Disk: saved ✓');
+    } else { Disk.pill(false, 'Disk: off (no start script)'); resumeSession(); }
   },
   async poll() {
     if (!this.ok || this.busy) return;
@@ -1724,6 +1838,9 @@ const COMMANDS = {
   hcB1: ['Deck B hot cue 1', null, () => decks.B.hotcue(0)],
   hcB2: ['Deck B hot cue 2', null, () => decks.B.hotcue(1)],
   ovHide: ['Hide the overlay', null, hideOverlay],
+  djbar: ['DJ bar on the stream on / off', 'b', () => setStreamOpt('djBar', !S.cfg.djBar)],
+  badge: ['Name badge: start of song / always / off', null, () => setStreamOpt('badgeMode', { start: 'always', always: 'off', off: 'start' }[S.cfg.badgeMode] || 'start')],
+  logo: ['Logo on the stream on / off', null, () => setStreamOpt('logoBug', !S.cfg.logoBug)],
   ov1: ['Overlay 1 show / hide', null, () => toggleOverlay(S.overlays[0])],
   ov2: ['Overlay 2 show / hide', null, () => toggleOverlay(S.overlays[1])],
   ov3: ['Overlay 3 show / hide', null, () => toggleOverlay(S.overlays[2])],
@@ -1782,7 +1899,8 @@ function buildCredits(mode) {
     const t = byVid(h.videoId) || h;
     const c = creatorOf(t) || creatorById(h.creatorId);
     if (c) featured.set(c.id, c);
-    lines.push(`• ${t.title || h.videoId} — ${c?.name || t.artist || 'Unknown creator'} — https://youtu.be/${h.videoId}${t.notes ? ' (' + t.notes + ')' : ''}`);
+    const where = String(h.videoId).startsWith('file:') ? (c?.channelId ? `https://www.youtube.com/channel/${c.channelId}` : '(song file)') : `https://youtu.be/${h.videoId}`;
+    lines.push(`• ${t.title || h.videoId} — ${c?.name || t.artist || 'Unknown creator'} — ${where}${t.notes ? ' (' + t.notes + ')' : ''}`);
   });
   let text = lines.length ? "Music in this episode (used with the creators' permission):\n" + lines.join('\n') : '';
   const chans = [...featured.values()].filter(c => c.channelId);
@@ -1844,7 +1962,7 @@ function renderQueue() {
       <img class="th" src="${thumb(t.videoId)}" alt="" loading="lazy">
       <div class="grow">
         <div class="ttl">${t.isNew ? '<span class="new">NEW</span> ' : ''}${esc(t.title || t.videoId)}</div>
-        <div class="sub">${creatorChip(t)}${t.bpm ? ' · ' + Math.round(t.bpm) + ' bpm' : ''}${t.flag ? ` · <span class="flag">${esc(t.flag)}</span>` : ''}</div>
+        <div class="sub">${creatorChip(t)}${isFileSong(t) ? ' · <span class="filetag" title="A song file on this computer: plays with no internet">♪ file</span>' : ''}${t.bpm ? ' · ' + Math.round(t.bpm) + ' bpm' : ''}${t.flag ? ` · <span class="flag">${esc(t.flag)}</span>` : ''}${!playable(t) ? ' · <span class="flag">needs internet</span>' : ''}</div>
       </div>
       <span class="tag">${tag}</span>
       <span class="eta" title="Starts in about">${eta != null ? '+' + fmt(eta) : ''}</span>
@@ -1917,6 +2035,13 @@ function initQueueUI() {
   };
   $('#quickAdd').addEventListener('submit', e => { e.preventDefault(); quick('end'); });
   $('#quickNext').onclick = () => quick('next');
+  $('#songFilesBtn').onclick = () => $('#songFiles').click();
+  $('#songFiles').onchange = e => { addSongFiles([...e.target.files]); e.target.value = ''; };
+  window.addEventListener('online', () => {
+    S.ytOffline = false; renderQueue(); toast('Internet is back — YouTube songs play again', 'good');
+    if (!window.YT?.Player) { const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.append(sc); }
+  });
+  window.addEventListener('offline', () => { renderQueue(); toast('No internet — song files keep playing; YouTube songs are skipped', 'bad'); });
   $('#lineupBtn').onclick = lineup;
   $('#lineupUndo').onclick = undoLineup;
 }
@@ -2044,7 +2169,8 @@ function initLibraryUI() {
   };
   $('#libProbeAll').onclick = async () => {
     if (!S.ytReady) { toast('YouTube player not ready yet', 'bad'); return; }
-    const missing = S.library.filter(t => !t.duration);
+    const missing = S.library.filter(t => !t.duration && !isFileSong(t));
+    S.library.filter(t => !t.duration && isFileSong(t)).forEach(fileLength);
     if (!missing.length) { toast('All lengths are known', 'good'); return; }
     toast(`Looking up ${missing.length} track(s)…`);
     for (const t of missing) {
@@ -2059,11 +2185,15 @@ function initLibraryUI() {
 
 // Test songs again (e.g. after the owner switched "Allow embedding" on) and clear the ⚠ on the ones that play.
 async function recheckSongs(list) {
-  if (!S.ytReady) { toast('YouTube player not ready yet', 'bad'); return; }
+  if (!S.ytReady && !list.every(isFileSong)) { toast('YouTube player not ready yet', 'bad'); return; }
   toast(`Checking ${list.length} song${list.length === 1 ? '' : 's'} again…`);
   let fixed = 0;
   for (const t of list) {
-    const p = await Probe.get(t.videoId);
+    const p = isFileSong(t) ? await new Promise(res => {   // a song file: can Chrome read it?
+      const el = document.createElement('audio'); el.preload = 'metadata';
+      el.onloadedmetadata = () => res({ duration: Math.round(el.duration) }); el.onerror = () => res({ error: 'file' });
+      el.src = '/media/' + t.file;
+    }) : await Probe.get(t.videoId);
     if (p?.duration) {
       t.duration = p.duration;
       if (t.flag) { delete t.flag; fixed++; }
@@ -2129,6 +2259,87 @@ function ingestLinks(text, place = 'end') {
   return tracks;
 }
 
+/* ---------------- song files: play with no internet, like a mixtape ---------------- */
+
+const SONG_FILE = /^(audio\/|video\/(mp4|webm)$)/;
+// How long a file plays, read on this computer before it is stored.
+function mediaLength(file) {
+  return new Promise(res => {
+    const el = document.createElement(file.type.startsWith('video/') ? 'video' : 'audio');
+    const url = URL.createObjectURL(file);
+    const done = d => { URL.revokeObjectURL(url); res(isFinite(d) ? d : 0); };
+    el.preload = 'metadata';
+    el.onloadedmetadata = () => done(el.duration);
+    el.onerror = () => done(0);
+    setTimeout(() => done(0), 8000);
+    el.src = url;
+  });
+}
+function fileLength(t) {
+  const el = document.createElement('audio');
+  el.preload = 'metadata';
+  el.onloadedmetadata = () => { if (isFinite(el.duration) && el.duration > 0) { t.duration = Math.round(el.duration); save.library(); renderQueue(); } el.removeAttribute('src'); };
+  el.src = '/media/' + t.file;
+}
+// "Lance - Night Drive.mp3" → writer Lance, title Night Drive
+function songFromName(name) {
+  const base = name.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/[_]+/g, ' ').trim();
+  const parts = base.split(/\s+[-–—]\s+/);
+  let title = base, c = null;
+  if (parts.length > 1) {
+    const first = matchCreator(parts[0]), last = matchCreator(parts[parts.length - 1]);
+    if (first) { c = first; title = parts.slice(1).join(' - '); } else if (last) { c = last; title = parts.slice(0, -1).join(' - '); }
+  }
+  return { title, c: c || matchCreator(base) };
+}
+async function addSongFiles(files, place = 'end') {
+  if (!Disk.key) { toast('Start the board with the Mad World Studios button to add song files', 'bad'); return []; }
+  const added = [];
+  toast(`Adding ${files.length} song file${files.length === 1 ? '' : 's'}…`);
+  for (const f of files) {
+    if (f.size > 1024 * 1024 * 1024) { toast(`"${f.name}" is over 1 GB`, 'bad'); continue; }
+    try {
+      const dur = await mediaLength(f);
+      const r = await fetch('/api/media', { method: 'POST', headers: { 'X-Key': Disk.key, 'Content-Type': 'application/octet-stream' }, body: f });
+      const j = await r.json();
+      if (!r.ok || !j.name) throw new Error(j.error || r.status);
+      let t = byVid('file:' + j.name);
+      if (!t) {
+        const { title, c } = songFromName(f.name);
+        t = { id: uid(), videoId: 'file:' + j.name, file: j.name, url: '', title: title.slice(0, 120), artist: c ? c.name : '', creatorId: c?.id,
+          license: 'Full permission — creator', approvedOn: today(), tags: '', notes: '', duration: Math.round(dur) || 0, plays: 0, addedAt: Date.now() };
+        S.library.push(t);
+      }
+      added.push(t);
+    } catch (e) { toast(`Could not add "${f.name}": ${e.message}`, 'bad'); }
+  }
+  if (!added.length) return [];
+  if (place === 'next') {
+    const set = new Set(added);
+    S.library = S.library.filter(t => !set.has(t));
+    const n = nextInList();
+    S.library.splice(n ? S.library.indexOf(n) : S.library.length, 0, ...added);
+  }
+  save.library(); renderQueue(); renderCreators();
+  toast(`${added.length} song file${added.length === 1 ? '' : 's'} ${place === 'next' ? 'play next' : 'added to the list'} — they play with no internet`, 'good');
+  return added;
+}
+// Dropped or picked files: pictures are overlays, music is songs, and a video is a song if it is longer than a minute.
+async function routeFiles(files, where = 'Q') {
+  const songs = [], ovs = [];
+  for (const f of files) {
+    if (where === 'O' || f.type.startsWith('image/')) ovs.push(f);
+    else if (f.type.startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(f.name)) songs.push(f);
+    else if (/^video\/(mp4|webm)$/.test(f.type)) ((await mediaLength(f)) >= 60 ? songs : ovs).push(f);
+    else ovs.push(f);
+  }
+  if (ovs.length) addOverlayFiles(ovs);
+  if (songs.length) {
+    const added = await addSongFiles(songs, where === 'N' ? 'next' : 'end');
+    if ((where === 'A' || where === 'B') && added[0]) decks[where].userLoad(added[0]);
+  }
+}
+
 // A whole playlist in one go (your writers' playlists, or one you make on YouTube).
 async function addPlaylist(list, place = 'end') {
   toast('Reading the playlist…');
@@ -2169,7 +2380,8 @@ document.addEventListener('dragenter', e => { if (linkDrag(e)) { e.preventDefaul
 document.addEventListener('dragover', e => {
   if (!linkDrag(e)) return;
   e.preventDefault();                      // never let Chrome open the link instead of the mixer
-  e.dataTransfer.dropEffect = 'copy';
+  const ea = e.dataTransfer.effectAllowed || 'all';
+  e.dataTransfer.dropEffect = /all|uninitialized|copy/i.test(ea) ? 'copy' : /link/i.test(ea) ? 'link' : 'move';
   showDropZone(true);
   const z = e.target.closest?.('.dz');
   $$('.dz').forEach(x => x.classList.toggle('over', x === z));
@@ -2182,14 +2394,20 @@ document.addEventListener('drop', e => {
   clearTimeout(dzTimer); showDropZone(false);
   const deckEl = e.target.closest?.('.deck');
   const where = e.target.closest?.('.dz')?.dataset.dz || (deckEl ? (deckEl.classList.contains('deck-a') ? 'A' : 'B') : 'Q');
-  // pictures and video files from the computer are always overlays
-  if (e.dataTransfer.files?.length) { addOverlayFiles(e.dataTransfer.files); return; }
+  const files = [...(e.dataTransfer.files || [])];
   const text = droppedText(e);
+  const isSong = ytUrls(text).length > 0;
+  // Dragging a song from YouTube also carries its thumbnail picture as a file:
+  // a YouTube link always wins, so songs never end up as overlays by mistake.
   if (where === 'O') {
-    if (ytUrls(text).length && !mediaLinks(text, true).length) { toast('YouTube songs go on a deck or the list. Overlays are pictures or short video files / links.', 'bad'); return; }
-    addOverlayLinks(text, true); return;
+    if (files.length) routeFiles(files, 'O');
+    else addOverlayLinks(text, true);
+    return;
   }
-  if (!ytUrls(text).length && mediaLinks(text).length) { addOverlayLinks(text); return; }
+  if (!isSong) {
+    if (files.length) { routeFiles(files, where); return; }       // song files, pictures or clips from the computer
+    if (mediaLinks(text).length) { addOverlayLinks(text); return; } // picture / video links from the web
+  }
   const tracks = ingestLinks(text, where === 'N' ? 'next' : 'end');
   if (!tracks.length) return;
   if (where === 'A' || where === 'B') decks[where].userLoad(tracks[0]);
@@ -2199,9 +2417,12 @@ document.addEventListener('drop', e => {
 document.addEventListener('paste', e => {
   if (e.target.closest('input, textarea, select') || !$('#imp').classList.contains('hidden')) return;
   const files = [...(e.clipboardData?.files || [])];
-  if (files.length) { e.preventDefault(); addOverlayFiles(files); return; }
   const text = e.clipboardData?.getData('text') || '';
-  if (!ytUrls(text).length) { if (mediaLinks(text).length) { e.preventDefault(); addOverlayLinks(text); } return; }
+  if (!ytUrls(text).length) {
+    if (files.length) { e.preventDefault(); routeFiles(files); }                       // a screenshot, a picture or a song file
+    else if (mediaLinks(text).length) { e.preventDefault(); addOverlayLinks(text); }  // a picture / video link
+    return;
+  }
   e.preventDefault();
   ingestLinks(text);
   renderQueue();
@@ -2541,10 +2762,8 @@ async function importData(file) {
 function initSettingsUI() {
   $('#warnSec').value = S.cfg.warnSec;
   $('#deadAirMode').value = S.cfg.deadAirMode;
-  $('#approvedOnly').checked = S.cfg.approvedOnly;
   $('#warnSec').onchange = e => { S.cfg.warnSec = clamp(+e.target.value || 30, 5, 120); save.cfg(); };
   $('#deadAirMode').onchange = e => { S.cfg.deadAirMode = e.target.value; save.cfg(); };
-  $('#approvedOnly').onchange = e => { S.cfg.approvedOnly = e.target.checked; save.cfg(); };
   $('#deckVideo').checked = S.cfg.deckVideo !== false;
   $('#deckVideo').onchange = e => { S.cfg.deckVideo = e.target.checked; save.cfg(); };
   $('#viewerTabMode').checked = S.cfg.viewerTab;
@@ -2662,6 +2881,7 @@ function deadAirCheck() {
 let tickN = 0, lastFrame = 0;
 // Runs the mixer's clock: from a timer, and from the Share tab's messages (which Chrome never slows down).
 function frame() {
+  if (S.shutting) return;
   const now = performance.now();
   if (now - lastFrame < 85) return;
   lastFrame = now;
@@ -2672,6 +2892,7 @@ function tick() {
   Object.values(decks).forEach(d => d.tick());
   autoTick();
   ovTick();
+  if (tickN % 30 === 0) saveSession();
   Voice.tick();
   if (tickN % 2 === 0) Remote.poll();
   renderAll();
@@ -2741,18 +2962,36 @@ function boot() {
   if (S.cfg.viewerTab) { decks.A.create(); decks.B.create(); Bus.send({ t: 'ping' }); }
   renderViewerPill();
   $('#viewerStatus').onclick = openViewer;
+  $('#quitBtn').onclick = shutDown;
 
   setTimeout(() => {
-    if (!S.ytReady) { const p = $('#ytStatus'); p.textContent = 'YouTube: not loading — check internet'; p.className = 'pill bad'; }
+    if (!S.ytReady) { const p = $('#ytStatus'); p.textContent = 'YouTube: offline'; p.title = 'No internet: YouTube songs are skipped. Song files (♪ file) play as normal.'; p.className = 'pill bad'; }
   }, 10000);
 
   // Closing the mixer: save the latest changes to disk straight away.
-  window.addEventListener('pagehide', () => { if (Disk.ok && Disk.dirty) { clearTimeout(Disk.timer); Disk.push(true); } });
+  window.addEventListener('pagehide', () => { saveSession(); if (Disk.ok && Disk.dirty && !S.shutting) { clearTimeout(Disk.timer); Disk.push(true); } });
   window.addEventListener('beforeunload', e => {
+    if (S.shutting) return;
     if (decks.A.isPlaying() || decks.B.isPlaying() || S.onAir) { e.preventDefault(); e.returnValue = ''; }
   });
 
   setInterval(frame, 100);
 }
 
-boot();
+// Only one DJ board may run at a time (a second one would fight over the songs and the Share tab).
+function bootOnce() {
+  if (!navigator.locks) { boot(); return; }
+  const start = steal => navigator.locks.request('late-night-board', steal ? { steal: true } : { ifAvailable: true }, async lock => {
+    if (!lock) { $('#splash').classList.add('hidden'); $('#elsewhere').classList.remove('hidden'); return; }
+    $('#elsewhere').classList.add('hidden');
+    boot();
+    await new Promise(() => {}); // hold the lock while this tab is open
+  }).catch(() => {
+    // another tab took over: stop here without saving anything
+    S.shutting = true;
+    document.body.innerHTML = '<div class="bye"><img src="logo-ivan.png" alt=""><h1>LATE NIGHT <em>with</em> IVAN</h1><p>The DJ board moved to another tab. You can close this one.</p></div>';
+  });
+  $('#useHere').onclick = () => start(true);
+  start(false);
+}
+bootOnce();

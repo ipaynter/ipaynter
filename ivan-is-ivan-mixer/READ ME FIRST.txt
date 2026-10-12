@@ -16,6 +16,20 @@ EVERY SHOW
      and tick "Also share tab audio".
   4. Keep the black window open during the show.
 
+ADDING SONGS
+  YouTube links:  drag them in, or paste into the box and press Enter.
+  Song files:     click "Song files" or drag MP3/WAV/M4A files in.
+                  Song files play with NO INTERNET - like a mixtape.
+
+SHOWING THE MIXER ON STREAM
+  The Share tab shows the video, the writer's name, your logo and a
+  DJ bar (both decks, time left, what's next). Turn them on or off
+  under "On stream" on the board.
+
+SHUT DOWN
+  Click the power button (top right of the board). Everything is saved.
+  The desktop button brings it all back where you left off.
+
 UPDATES
   Download the new zip into Downloads, then click the desktop button.
   It installs the new version by itself. Old versions go to the

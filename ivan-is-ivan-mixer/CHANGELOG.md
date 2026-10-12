@@ -18,6 +18,39 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v4.1.0 — 2026-10-12 — Mixtape mode, rock solid
+Commit: `pending`
+- **Plays with no internet, like a mixtape:**
+  - Add your writers' **song files** (MP3, M4A, AAC, WAV, OGG, FLAC, MP4, WEBM) with **♪ Song files**, or by dragging them in. They are kept in `data\media` and play with no internet at all.
+  - YouTube songs still need the internet. With none, they are marked *needs internet* and skipped, and the show carries on with the files.
+  - When the internet comes back, YouTube songs play again by themselves.
+- **Fixed: dragging songs in.**
+  - Dragging a song from YouTube also drags its thumbnail picture, and v4.0.0 wrongly treated that picture as an overlay, so those songs never reached the list. A YouTube link now always wins.
+  - Drops are accepted whatever kind of drag the page allows.
+- **Fixed: restarting.**
+  - Only one board can run at a time. A second tab (for example after Chrome's "restore tabs") shows "already open" instead of overwriting your songs.
+  - An extra Share tab is put on standby instead of fighting the live one.
+  - `start-windows.bat` has Windows line endings again. v4.0.0 broke them, which can upset Windows' command prompt.
+- **Pick up where you left off:** after a restart, both decks come back with the same songs at the same place.
+- **⏻ Shut down** (top right): saves everything, stops the music, and closes the Share tab and the black window. It tells you if the disk copy could not be written.
+- **On stream:**
+  - **Name badge**: top left (new default), top right or bottom left, shown for the first 20 s of each song, always, or off. It no longer covers lyrics.
+  - **DJ bar**: both decks, time left, the crossfader and what's next, along the bottom of the stream (key **B**).
+  - **Your logo** in the top corner.
+- **Your logo** is also on the board, the start screen and the Share tab, and as the Chrome tab icon.
+- **No questions when adding:** a link typed into a deck's box is added and loaded straight away. The approved-only switch is gone.
+- **Fixed:** a deck's **next ⤵** still looked at the old queue and always said "Queue is empty".
+- **Safer saving:**
+  - The disk copy is only replaced by newer data.
+  - The previous copy is kept as `mixer-data.prev.json`.
+  - The daily backup is the first save of the day, so later mistakes can't overwrite it.
+  - Data saved inside the app folder is kept on update.
+- **Sturdier start:**
+  - YouTube look-ups give up after 10 s instead of freezing the board.
+  - A second click waits for a busy board.
+  - An older board's black window is closed properly.
+  - A damaged or empty key file is replaced.
+
 ## v4.0.0 — 2026-10-08 — Late Night with Ivan
 Commit: `bd7db4e`
 - **New name:** *Late Night with Ivan — DJ Board*, by Mad World Studios. The viewer page is now called the **Share tab**, the tab you share in StreamYard.

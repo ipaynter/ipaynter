@@ -3,25 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="icon.png">
+<link rel="icon" href="logo-ivan.png">
 <title>Late Night with Ivan — DJ Board</title>
-<link rel="stylesheet" href="styles.css?v=4.0.0">
+<link rel="stylesheet" href="styles.css?v=4.1.0">
 </head>
 <body>
 
 <!-- Power-on: Chrome needs one click before it allows sound -->
 <div id="splash" class="splash">
   <div class="splash-inner">
+    <img class="splash-logo" src="logo-ivan.png" alt="">
     <div class="logo-big">LATE NIGHT <em>with</em> IVAN</div>
     <div class="logo-sub">DJ board</div>
     <div class="ver-splash" data-ver></div>
     <button id="power" class="power" type="button">Power on</button>
     <p class="hint">One click wakes up the sound and opens the Share tab.</p>
+    <div class="mws"><img src="logo-mws.png" alt=""> a Mad World Studios production</div>
     <p id="fileWarn" class="hint bad hidden">You opened this as a file. YouTube will not play this way.<br>Start the mixer with the desktop button or <b>start-windows.bat</b>.</p>
   </div>
 </div>
 
+<div id="elsewhere" class="splash hidden">
+  <div class="splash-inner">
+    <img class="splash-logo" src="logo-ivan.png" alt="">
+    <div class="logo-big">LATE NIGHT <em>with</em> IVAN</div>
+    <p class="hint">The DJ board is already open in another tab or window. Use that one.</p>
+    <button id="useHere" class="power" type="button">Use this tab instead</button>
+  </div>
+</div>
+
 <header class="topbar">
+  <img class="brand-logo" src="logo-ivan.png" alt="">
   <div class="brand">LATE NIGHT <em>with</em> IVAN <span class="ver" data-ver title="App version. See CHANGELOG.md."></span></div>
   <button id="onair" class="onair" type="button" data-cmd="onair" title="Starts the show clock. Press it when you go live in StreamYard.">ON AIR</button>
   <div class="clocks">
@@ -37,6 +49,7 @@
   <span id="remoteStatus" class="pill" title="Stream Deck buttons work when the mixer is started with the desktop button">Deck</span>
   <span id="ytStatus" class="pill" title="YouTube connection">YouTube</span>
   <button id="helpBtn" class="pill pill-btn" type="button" title="Quick start">?</button>
+  <button id="quitBtn" class="pill pill-btn quit" type="button" title="Shut down: saves everything, stops the music and closes the black window. Start again with the desktop button — everything comes back where you left it.">⏻</button>
 </header>
 
 <div id="deadAir" class="dead-air hidden">No music playing</div>
@@ -112,6 +125,14 @@
     <button type="button" id="ovHide" class="danger hidden" title="Take the overlay off the share page now">Hide ✕</button>
     <input type="file" id="ovFile" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" multiple hidden>
   </div>
+  <div class="stream-opts">
+    <b title="What the Share tab shows on your stream">On stream</b>
+    <label title="Where the writer's name badge sits. Top corners keep it off the lyrics.">badge
+      <select id="badgePos"><option value="tl">top left</option><option value="tr">top right</option><option value="bl">bottom left</option></select></label>
+    <select id="badgeMode" title="When the badge shows"><option value="start">first 20 s of each song</option><option value="always">always</option><option value="off">off</option></select>
+    <label class="check" title="A bar along the bottom of the stream with both decks, time left, the crossfader and what's next (key B)"><input type="checkbox" id="djBarOn"> DJ bar</label>
+    <label class="check" title="Your logo in the top corner of the stream"><input type="checkbox" id="logoOn"> logo</label>
+  </div>
 </section>
 
 <!-- THE LIST: all of the show's music, in play order -->
@@ -123,6 +144,8 @@
       <input id="quickUrl" placeholder="Paste YouTube links or a playlist link — Enter adds them" title="Paste one link, many links, or a whole YouTube playlist link. Title, writer and length fill in by themselves.">
       <button type="submit" class="primary" title="Add to the bottom of the list (Enter)">Add</button>
       <button type="button" id="quickNext" title="Add it so it plays NEXT">Play next</button>
+      <button type="button" id="songFilesBtn" title="Add song files from this computer (MP3, M4A, WAV, FLAC, OGG, MP4…). They play with no internet — like a mixtape.">♪ Song files</button>
+      <input type="file" id="songFiles" accept="audio/*,video/mp4,video/webm,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple hidden>
     </form>
     <input id="libSearch" placeholder="Find…" class="find" title="Filter the list">
     <button type="button" id="lineupBtn" data-cmd="smart" title="Line-up assistant: arranges the songs still to play, keeping writers fair (you 40%, others 20%), tempo and energy flowing. One click, and Undo puts it back.">✨ Line-up</button>
@@ -193,7 +216,6 @@
             <option value="always">Any time On Air</option>
             <option value="off">Off</option>
           </select></label>
-        <label class="check"><input type="checkbox" id="approvedOnly" checked> Approved-only mode (decks only play songs from your list)</label>
         <label class="check" title="ON (recommended): music and video play in a separate Share tab that you share in StreamYard, and the mixer stays visible. OFF: everything in this one tab."><input type="checkbox" id="viewerTabMode" checked> Play music in a separate <b>Share tab</b> (share that tab in StreamYard)</label>
         <label class="check" title="Shows a silent copy of each video on its deck, in step with the Share tab. Untick on a slow computer or connection."><input type="checkbox" id="deckVideo" checked> Show the videos on the decks</label>
       </div>
@@ -386,7 +408,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=4.0.0"></script>
-<script src="https://www.youtube.com/iframe_api"></script>
+<script src="app.js?v=4.1.0"></script>
+<script src="https://www.youtube.com/iframe_api" onerror="window.ytApiFailed && window.ytApiFailed()"></script>
 </body>
 </html>

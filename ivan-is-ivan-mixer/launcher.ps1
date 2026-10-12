@@ -121,6 +121,7 @@ if ($best) {
         }
         # the old version goes to the Recycle Bin, the new one takes its place
         if (Test-Path $App) {
+            Save-OldData $App "app-v$have"     # songs saved inside the app folder (started without the button) are kept
             Recycle $App "replaced by v$bestVer"
             if (Test-Path $App) { Rename-Item -LiteralPath $App -NewName ("app-old-v$have-" + (Get-Date -Format 'HHmmss')) }
         }

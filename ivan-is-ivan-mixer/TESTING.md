@@ -107,6 +107,20 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 - [ ] 8a.5 Pick **until I click**, then show a picture. **Hide ✕** takes it off.
 - [ ] 8a.6 Close and reopen the board. The overlays are still there.
 
+## 8c. Offline (mixtape mode)
+
+- [ ] 8c.1 Click **♪ Song files** and pick 3 MP3s from your writers. They appear in the list marked **♪ file**.
+- [ ] 8c.2 Unplug the network, or turn Wi-Fi off. YouTube songs show **needs internet**.
+- [ ] 8c.3 Press **▶ Play next**. A song file plays at once. The Share tab shows your logo, the badge and the DJ bar.
+- [ ] 8c.4 Switch to **Auto**. It plays file after file and skips the YouTube songs.
+- [ ] 8c.5 Plug the network back in. A message says the internet is back, and YouTube songs play again.
+
+## 8d. Shut down and come back
+
+- [ ] 8d.1 Load songs on both decks and play one for a minute. Click **⏻**, then **Shut down**. The black window and the Share tab close.
+- [ ] 8d.2 Click the desktop button and **Power on**. Both decks have the same songs, at the same place.
+- [ ] 8d.3 Open `http://localhost:8765` in a second tab. It says **already open** and doesn't touch your songs.
+
 ## 8b. Overriding Smart DJ
 
 - [ ] 8b.1 Let Smart DJ fill the queue. Its songs show a **SMART** tag and each row shows the song's image.
