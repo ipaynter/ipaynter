@@ -19,7 +19,7 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 ---
 
 ## v4.2.0 — 2026-10-15 — Level meters
-Commit: `pending`
+Commit: `60c7e84`
 - **LED level meters** in the mixer, always on screen: green, yellow and red lights with a peak hold.
   - **MUSIC OUT L / R** shows the real sound leaving the Share tab, which is exactly what StreamYard picks up.
     - When you click the Share tab at the start of a show, Chrome asks *"Share this tab?"*. Click **Share**. That only feeds these meters.
