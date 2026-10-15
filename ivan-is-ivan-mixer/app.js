@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '4.2.0';
+const APP_VERSION = '4.2.1';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -106,7 +106,7 @@ const S = {
     warnSec: 30, volA: 80, volB: 80, voiceThresh: 35, deadAirMode: 'autodj',
     snapBars: true, smartFill: true, viewerTab: true, deckVideo: true, mode: 'assist',
     ovPos: 'big', ovSecs: 10, ovSound: false,
-    badgePos: 'tl', badgeMode: 'start', djBar: true, logoBug: true
+    badgePos: 'tl', badgeMode: 'start', logoBug: true
   }, store.get('iii.settings', {})),
   xf: 0,              // crossfader 0 = A, 1 = B
   duckGain: 1, duckTarget: 1, panicGain: 1,
@@ -1496,18 +1496,6 @@ function badgeVisible(main) {
   if (S.cfg.badgeMode === 'always') return true;
   return S.transitioning || !main.isPlaying() || main.time - (main.cuePoint || 0) < 20;
 }
-// The DJ bar on the stream: both decks, time left, crossfader, what's next.
-function barMsg(main) {
-  const deck = d => {
-    const t = d.track;
-    if (!t || d.errored) return {};
-    return { title: t.title || t.videoId, artist: artistOf(t), thumb: thumb(t.videoId), rem: Math.ceil(d.remaining()), pct: d.dur ? +(d.time / d.dur).toFixed(3) : 0, live: d === main && d.isPlaying() };
-  };
-  const o = other(main);
-  const nxt = o.track && !o.played && !o.errored ? o.track : nextInList();
-  const bpm = ['A', 'B'].map(id => decks[id].track?.bpm ? `${id} ${Math.round(decks[id].track.bpm)}` : '').filter(Boolean).join('  ·  ');
-  return { A: deck(decks.A), B: deck(decks.B), xf: +S.xf.toFixed(2), next: nxt ? `${nxt.title || nxt.videoId} — ${artistOf(nxt)}` : '', bpm: bpm ? bpm + ' BPM' : '' };
-}
 
 /* ---------------- session: pick up where you left off after a restart ---------------- */
 
@@ -1553,7 +1541,6 @@ function sendDisplay() {
     A: { op: +opA.toFixed(2), top: wa >= 0.5 }, B: { op: +opB.toFixed(2), top: wa < 0.5 },
     badge: t && !main.errored && badgeVisible(main) ? { name: artistOf(t), song: t.title || '', avatar: avatarOf(c) || thumb(t.videoId), color: safeColor(c?.color || (main.id === 'A' ? '#22d3ee' : '#ff7a3d')), pos: S.cfg.badgePos } : null,
     ov: overlayMsg(),
-    bar: S.cfg.djBar ? barMsg(main) : null,
     logo: !!S.cfg.logoBug
   };
   const sig = JSON.stringify(msg);
@@ -1659,12 +1646,11 @@ function setStreamOpt(k, v) {
 function syncStreamUI() {
   if (!$('#badgePos')) return;
   $('#badgePos').value = S.cfg.badgePos; $('#badgeMode').value = S.cfg.badgeMode;
-  $('#djBarOn').checked = !!S.cfg.djBar; $('#logoOn').checked = !!S.cfg.logoBug;
+  $('#logoOn').checked = !!S.cfg.logoBug;
 }
 function initOverlayUI() {
   $('#badgePos').onchange = e => setStreamOpt('badgePos', e.target.value);
   $('#badgeMode').onchange = e => setStreamOpt('badgeMode', e.target.value);
-  $('#djBarOn').onchange = e => setStreamOpt('djBar', e.target.checked);
   $('#logoOn').onchange = e => setStreamOpt('logoBug', e.target.checked);
   syncStreamUI();
   const list = $('#ovList');
@@ -1926,7 +1912,6 @@ const COMMANDS = {
   hcB1: ['Deck B hot cue 1', null, () => decks.B.hotcue(0)],
   hcB2: ['Deck B hot cue 2', null, () => decks.B.hotcue(1)],
   ovHide: ['Hide the overlay', null, hideOverlay],
-  djbar: ['DJ bar on the stream on / off', 'b', () => setStreamOpt('djBar', !S.cfg.djBar)],
   badge: ['Name badge: start of song / always / off', null, () => setStreamOpt('badgeMode', { start: 'always', always: 'off', off: 'start' }[S.cfg.badgeMode] || 'start')],
   logo: ['Logo on the stream on / off', null, () => setStreamOpt('logoBug', !S.cfg.logoBug)],
   ov1: ['Overlay 1 show / hide', null, () => toggleOverlay(S.overlays[0])],

@@ -23,10 +23,9 @@ ADDING SONGS
   Song files:     click "Song files" or drag MP3/WAV/M4A files in.
                   Song files play with NO INTERNET - like a mixtape.
 
-SHOWING THE MIXER ON STREAM
-  The Share tab shows the video, the writer's name, your logo and a
-  DJ bar (both decks, time left, what's next). Turn them on or off
-  under "On stream" on the board.
+WHAT VIEWERS SEE
+  The Share tab shows the video, the writer's name and your logo.
+  Set them under "On stream" on the board.
 
 SHUT DOWN
   Click the power button (top right of the board). Everything is saved.

@@ -107,41 +107,9 @@ function run(m) {
 
 let badgeSig = '';
 const BADGE_POS = new Set(['tl', 'tr', 'bl']);
-const thumbOk = u => (u === 'logo-ivan.png' || /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/\w+\.jpg$/.test(u || '') ? u : '');
-const clamp01 = v => Math.max(0, Math.min(1, +v || 0));
-const fmt = s => { s = Math.max(0, Math.round(+s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-
-// The DJ bar: both decks, time left, crossfader and what's next, along the bottom of the stream.
-const barSig = { A: '', B: '' };
-function djBar(b) {
-  document.body.classList.toggle('bar-on', !!b);
-  if (!b) return;
-  for (const id of ['A', 'B']) {
-    const d = b[id] || {}, el = $('dj' + id);
-    const sig = [d.title, d.artist, d.thumb].join('|');
-    if (sig !== barSig[id]) {
-      barSig[id] = sig;
-      const im = el.querySelector('img'), src = thumbOk(d.thumb);
-      if (src) im.src = src; else im.removeAttribute('src');
-      im.style.visibility = src ? '' : 'hidden';
-      el.querySelector('.ti').textContent = String(d.title || '—');
-      el.querySelector('.wr').textContent = String(d.artist || '');
-    }
-    el.querySelector('.pr i').style.width = (clamp01(d.pct) * 100).toFixed(1) + '%';
-    el.querySelector('.tm').textContent = d.title ? '-' + fmt(d.rem) : '';
-    el.classList.toggle('live', !!d.live);
-    el.classList.toggle('warn', !!d.live && d.rem <= 30 && d.rem > 10);
-    el.classList.toggle('crit', !!d.live && d.rem <= 10 && d.title);
-  }
-  $('xfv').style.left = (clamp01(b.xf) * 100).toFixed(1) + '%';
-  $('nx').innerHTML = '';
-  if (b.next) { const k = document.createElement('b'); k.textContent = 'NEXT  '; $('nx').append(k, document.createTextNode(String(b.next))); }
-  $('bpmv').textContent = String(b.bpm || '');
-}
 
 function display(m) {
   overlay(m.ov);
-  djBar(m.bar);
   const corner = m.ov && m.ov.pos === 'corner';
   $('bug').classList.toggle('hidden', !m.logo || corner);
   for (const id of ['A', 'B']) {

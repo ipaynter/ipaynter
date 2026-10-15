@@ -18,6 +18,10 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v4.2.1 — 2026-10-15 — Cleaner stream
+Commit: `pending`
+- **Removed the DJ bar from the Share tab.** That was the strip along the bottom of the stream with the current song, the mixer and the next song, with timers. Viewers now see only the video, the name badge and your logo. The board still shows everything to you.
+
 ## v4.2.0 — 2026-10-15 — Level meters
 Commit: `60c7e84`
 - **LED level meters** in the mixer, always on screen: green, yellow and red lights with a peak hold.

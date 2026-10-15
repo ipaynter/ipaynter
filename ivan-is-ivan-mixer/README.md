@@ -125,8 +125,7 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 
 **On stream (what the Share tab shows)**
 - **Name badge:** top left (default), top right or bottom left. It shows for the first 20 s of each song, always, or never, and stays off the lyrics.
-- **DJ bar:** both decks, time left, the crossfader and what's next, along the bottom of the stream. Key **B** turns it on and off. This is how viewers see the mixer and the video together.
-- **Logo:** yours, in the top corner.
+- **Logo:** yours, in the top corner. That's all viewers see besides the video. Times and what's next stay on your board.
 
 **Shut down and start again**
 - **⏻** (top right) saves everything, stops the music and closes the Share tab and the black window.

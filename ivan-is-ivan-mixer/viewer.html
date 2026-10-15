@@ -27,7 +27,6 @@
   /* where the badge sits: top corners keep it off the lyrics, which are usually at the bottom */
   .badge.pos-tr { left: auto; right: 2.5vw; }
   .badge.pos-bl { top: auto; bottom: 4vh; }
-  body.bar-on .badge.pos-bl { bottom: calc(var(--barh) + 2vh); }
   .badge.pos-tr.enter { animation-name: badgeInR; }
   @keyframes badgeInR { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
   .badge.leave { animation: badgeOut .5s ease forwards; }
@@ -35,32 +34,7 @@
   /* your logo, top right */
   .bug { position: fixed; z-index: 11; top: 3vh; right: 2vw; width: clamp(56px, 6.5vw, 120px); opacity: .92; filter: drop-shadow(0 4px 12px rgba(0,0,0,.6)); transition: opacity .4s; pointer-events: none; }
   .bug.hidden { opacity: 0; }
-  body.badge-tr .bug { top: auto; bottom: calc(3vh + var(--barnow, 0px)); }
-  /* the DJ bar: both decks, time left, crossfader and what's next */
-  :root { --barh: 12vh; }
-  .djbar { position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; height: var(--barh); display: grid; grid-template-columns: 1fr minmax(160px, 18vw) 1fr; align-items: center; gap: 1.2vw; padding: 0 1.4vw;
-    background: linear-gradient(180deg, rgba(5, 7, 11, .55), rgba(5, 7, 11, .92)); border-top: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(6px); transform: translateY(105%); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
-  body.bar-on .djbar { transform: none; }
-  body.bar-on { --barnow: var(--barh); }
-  .dj { --c: #4fd1c5; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .9vw; min-width: 0; opacity: .55; transition: opacity .4s; }
-  .dj.b { --c: #f6ad55; }
-  .dj.live { opacity: 1; }
-  .dj img { height: calc(var(--barh) * .62); aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 2px solid var(--c); background: #000; }
-  .dj .t { min-width: 0; }
-  .dj .ti { font-weight: 800; font-size: clamp(12px, 1.35vw, 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dj .wr { color: #cdd5df; font-size: clamp(10px, .95vw, 17px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dj .pr { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .12); margin-top: .6vh; overflow: hidden; }
-  .dj .pr i { display: block; height: 100%; width: 0; background: var(--c); transition: width .25s linear; }
-  .dj .tm { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: clamp(14px, 1.8vw, 32px); color: var(--c); }
-  .dj.warn .tm { color: #f6e05e; } .dj.crit .tm { color: #fc5c65; }
-  .mid { text-align: center; min-width: 0; }
-  .xfv { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #4fd1c5, #2a2f38 35% 65%, #f6ad55); margin: 0 auto .8vh; }
-  .xfv i { position: absolute; top: -5px; width: 8px; height: 16px; margin-left: -4px; border-radius: 3px; background: #fff; left: 0; transition: left .2s linear; }
-  .mid .nx { font-size: clamp(10px, .9vw, 16px); color: #cdd5df; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mid .nx b { color: #fff; letter-spacing: 1px; }
-  .mid .bpm { font-family: ui-monospace, Consolas, monospace; font-size: clamp(9px, .8vw, 14px); color: #8a95a8; margin-top: .3vh; }
-  body.bar-on .ov.pos-lower { bottom: calc(var(--barh) + 3vh); }
-  body.bar-on .ov.pos-big { bottom: calc(var(--barh) + 3vh); }
+  body.badge-tr .bug { top: auto; bottom: 3vh; }
   .badge.enter { animation: badgeIn .7s cubic-bezier(.2, .8, .2, 1); }
   .badge img { width: clamp(48px, 5.5vw, 84px); aspect-ratio: 1; border-radius: 50%; object-fit: cover; flex: none; border: 3px solid var(--cc); background: #111; }
   .badge .txt { min-width: 0; }
@@ -99,12 +73,6 @@
 
   <img class="bug hidden" id="bug" src="logo-ivan.png" alt="">
 
-  <div class="djbar" id="djbar">
-    <div class="dj a" id="djA"><img alt=""><div class="t"><div class="ti"></div><div class="wr"></div><div class="pr"><i></i></div></div><div class="tm"></div></div>
-    <div class="mid"><div class="xfv"><i id="xfv"></i></div><div class="nx" id="nx"></div><div class="bpm" id="bpmv"></div></div>
-    <div class="dj b" id="djB"><img alt=""><div class="t"><div class="ti"></div><div class="wr"></div><div class="pr"><i></i></div></div><div class="tm"></div></div>
-  </div>
-
   <div class="badge hidden" id="badge">
     <img id="avatar" alt="">
     <div class="txt"><div class="name" id="name"></div><div class="song" id="song"></div></div>
@@ -125,7 +93,7 @@
   <div class="connect hidden" id="dup"><div><img class="logo" src="logo-ivan.png" alt=""><h1>EXTRA SHARE TAB</h1><p>Another Share tab is already live. Close this one.</p></div></div>
   <div class="status hidden" id="status">Mixer not connected — open the Mixer tab</div>
 
-  <script src="viewer.js?v=4.2.0"></script>
+  <script src="viewer.js?v=4.2.1"></script>
   <script src="https://www.youtube.com/iframe_api" onerror="window.ytLoadFailed && window.ytLoadFailed()"></script>
 </body>
 </html>

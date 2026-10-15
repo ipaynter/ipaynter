@@ -111,7 +111,7 @@ Time needed: about 45 minutes. Use real songs from your writers, wear headphones
 
 - [ ] 8c.1 Click **♪ Song files** and pick 3 MP3s from your writers. They appear in the list marked **♪ file**.
 - [ ] 8c.2 Unplug the network, or turn Wi-Fi off. YouTube songs show **needs internet**.
-- [ ] 8c.3 Press **▶ Play next**. A song file plays at once. The Share tab shows your logo, the badge and the DJ bar.
+- [ ] 8c.3 Press **▶ Play next**. A song file plays at once. The Share tab shows your logo and the badge.
 - [ ] 8c.4 Switch to **Auto**. It plays file after file and skips the YouTube songs.
 - [ ] 8c.5 Plug the network back in. A message says the internet is back, and YouTube songs play again.
 
