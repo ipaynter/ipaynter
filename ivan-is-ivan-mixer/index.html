@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="logo-ivan.png">
 <title>Late Night with Ivan — DJ Board</title>
-<link rel="stylesheet" href="styles.css?v=4.1.0">
+<link rel="stylesheet" href="styles.css?v=4.2.0">
 </head>
 <body>
 
@@ -69,6 +69,14 @@
       <div class="bm-row bm-rb"><b>B</b><span class="cells" id="bmCellsB"></span><em id="bmB">—</em></div>
       <div id="bmDelta" class="bm-d">tempo</div>
     </div>
+    <div class="levels" id="levels" title="Level meters. Green is good, yellow is loud, red is too loud.">
+      <div class="lv-head"><b>MUSIC OUT</b><span id="lvMusicSrc" class="lv-src est">estimate</span></div>
+      <div class="lv-row"><span>L</span><div class="led" id="ledML"></div></div>
+      <div class="lv-row"><span>R</span><div class="led" id="ledMR"></div></div>
+      <div class="lv-head"><b>MIC</b><span id="lvMicSrc" class="lv-src">off — click</span></div>
+      <div class="lv-row"><span>L</span><div class="led" id="ledVL"></div></div>
+      <div class="lv-row"><span>R</span><div class="led" id="ledVR"></div></div>
+    </div>
     <div class="xf">
       <b class="xa">A</b>
       <input type="range" id="xfader" min="0" max="1000" value="0" aria-label="Crossfader" data-cmd="xfRight" title="Crossfader: left plays A, right plays B">
@@ -90,6 +98,7 @@
         <select id="curve" title="Crossfader curve"><option value="smooth">smooth</option><option value="linear">linear</option><option value="cut">cut</option></select>
         <label class="duck grow" title="How quiet the music gets while you talk">talk to <b id="duckVal">25%</b><input type="range" id="duckLevel" min="0" max="70" value="25"></label>
       </div>
+      <label class="duck" title="Which input the MIC meters (and voice auto-duck) listen to. Pick your Elgato mic — or Wave Link's Stream mix to see everything that goes out.">mic <select id="micDevice"><option value="">Windows default mic</option></select></label>
       <label class="check" title="Listens to your mic LEVEL only (never records) and dips the music while you talk. Wear headphones."><input type="checkbox" id="voiceDuck"> voice auto-duck</label>
       <div class="mic-row">
         <div class="mini-meter" id="micMeter" title="Mic level; the line is the trigger point"><i></i><b id="micThreshMark"></b></div>
@@ -408,7 +417,7 @@
 <div id="toasts" class="toasts"></div>
 <div class="probe-wrap" aria-hidden="true"><div id="probe"></div></div>
 
-<script src="app.js?v=4.1.0"></script>
+<script src="app.js?v=4.2.0"></script>
 <script src="https://www.youtube.com/iframe_api" onerror="window.ytApiFailed && window.ytApiFailed()"></script>
 </body>
 </html>

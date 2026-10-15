@@ -235,7 +235,7 @@ addEventListener('online', () => {
 
 // Report play position to the mixer 10x a second (this also keeps the mixer's timing exact in the background).
 setInterval(() => {
-  const out = { t: 'tick' };
+  const out = { t: 'tick', lv: levels() };
   for (const id of ['A', 'B']) {
     const p = P[id];
     if (!ready[id] || !p) continue;
@@ -246,8 +246,41 @@ setInterval(() => {
   $('status').classList.toggle('hidden', activated === false || Date.now() - lastMixer < 3000);
 }, 100);
 
-$('connect').onclick = () => { activated = true; $('connect').classList.add('hidden'); hello(); };
+// Level meters: this tab listens to its OWN sound (the same sound StreamYard picks up)
+// and sends left / right levels to the board's MUSIC OUT meters. Chrome asks once: "Share this tab?"
+let meter = null;
+async function startMeter() {
+  if (meter || !navigator.mediaDevices?.getDisplayMedia) return;
+  try {
+    const st = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1 }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+      preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'
+    });
+    st.getVideoTracks().forEach(t => { t.enabled = false; });   // only the sound is needed
+    const at = st.getAudioTracks()[0];
+    if (!at) { st.getTracks().forEach(t => t.stop()); return; }
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(new MediaStream([at]));
+    const sp = ctx.createChannelSplitter(2); src.connect(sp);
+    const an = [0, 1].map(i => { const a = ctx.createAnalyser(); a.fftSize = 1024; sp.connect(a, i); return a; });
+    meter = { ctx, an, buf: new Float32Array(1024), st };
+    at.addEventListener('ended', () => { meter = null; try { ctx.close(); } catch { /* fine */ } });
+  } catch { meter = null; /* declined: the board shows an estimate instead */ }
+}
+// [left, right], each [peak, rms] from 0 to 1
+function levels() {
+  if (!meter) return null;
+  return meter.an.map(a => {
+    a.getFloatTimeDomainData(meter.buf);
+    let pk = 0, sum = 0;
+    for (const v of meter.buf) { const x = v < 0 ? -v : v; if (x > pk) pk = x; sum += v * v; }
+    return [+pk.toFixed(4), +Math.sqrt(sum / meter.buf.length).toFixed(4)];
+  });
+}
+
+$('connect').onclick = () => { activated = true; $('connect').classList.add('hidden'); hello(); startMeter(); };
 document.addEventListener('keydown', e => {
+  if (e.key === 'm' || e.key === 'M') startMeter();   // turn the level meters on, if "Share" was not clicked
   if (e.key === 'f' || e.key === 'F') {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else document.documentElement.requestFullscreen().catch(() => {});

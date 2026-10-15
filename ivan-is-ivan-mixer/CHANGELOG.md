@@ -18,6 +18,17 @@ The format is **MAJOR.MINOR.PATCH**, for example `2.5.0`:
 
 ---
 
+## v4.2.0 — 2026-10-15 — Level meters
+Commit: `pending`
+- **LED level meters** in the mixer, always on screen: green, yellow and red lights with a peak hold.
+  - **MUSIC OUT L / R** shows the real sound leaving the Share tab, which is exactly what StreamYard picks up.
+    - When you click the Share tab at the start of a show, Chrome asks *"Share this tab?"*. Click **Share**. That only feeds these meters.
+    - If you skip it, the meters show an **estimate** from the faders. Press **M** in the Share tab to turn the real meters on.
+  - **MIC L / R** shows your voice input. It switches on with **Power on**, and Chrome asks for the mic once.
+    - Pick the input under **more → mic**: your Elgato mic, or Wave Link's Stream mix to see everything that goes out.
+    - If the mic is off, click the note next to MIC.
+- Voice auto-duck uses the same mic and remembers whether it was on.
+
 ## v4.1.0 — 2026-10-12 — Mixtape mode, rock solid
 Commit: `51e5d83`
 - **Plays with no internet, like a mixtape:**

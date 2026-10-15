@@ -415,3 +415,19 @@ body.staged .stage-ctrl { display: flex; }
 .bye { min-height: 100vh; display: grid; place-content: center; text-align: center; gap: 6px; color: var(--dim); }
 .bye img { width: 160px; margin: 0 auto 10px; } .bye h1 { color: var(--text); letter-spacing: 4px; margin: 0 0 10px; } .bye em { color: var(--b); font-weight: 300; }
 .filetag { color: var(--green); font-weight: 600; }
+
+/* ---------- LED level meters ---------- */
+.levels { background: #0b0d10; border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+.lv-head { display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 1px; margin-top: 2px; }
+.lv-head b { color: var(--text); font-weight: 700; }
+.lv-src { font-size: 10px; color: var(--green); cursor: default; }
+.lv-src.est { color: var(--dim); }
+.lv-src.bad { color: var(--yellow); cursor: pointer; text-decoration: underline dotted; }
+.lv-row { display: grid; grid-template-columns: 10px 1fr; align-items: center; gap: 5px; font-size: 9px; color: var(--dim); }
+.led { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; height: 8px; }
+.led i { border-radius: 1px; background: #1a1e25; transition: background-color .05s; }
+.led i.g.on { background: #2ee59d; box-shadow: 0 0 4px rgba(46, 229, 157, .6); }
+.led i.y.on { background: #f6e05e; box-shadow: 0 0 4px rgba(246, 224, 94, .6); }
+.led i.r.on { background: #fc5c65; box-shadow: 0 0 5px rgba(252, 92, 101, .8); }
+.levels.clip { border-color: var(--red); }
+#micDevice { max-width: 150px; font-size: 11px; padding: 2px; }

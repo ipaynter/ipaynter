@@ -118,6 +118,11 @@ It understands lines like `1. Song – Ivan https://youtu.be/…`, `Writer 2 | S
 - **Don't close the Share tab during the show.** The music plays from it.
 - **Creator pictures** come from each writer's YouTube channel automatically. Click **Image** in the Creators form to upload your own instead.
 
+**Level meters (in the mixer)**
+- **MUSIC OUT L / R:** the real sound leaving the Share tab, which is what StreamYard gets. When Chrome asks *"Share this tab?"* after you click the Share tab, click **Share**. If you skipped it, press **M** in the Share tab. Until then the meters show an *estimate* from the faders.
+- **MIC L / R:** your voice. Choose the input under **more → mic**: the Elgato mic, or Wave Link's Stream mix to see the whole mix going out.
+- Green is good, yellow is loud, and red is too loud. If the music sits in the red, turn **M** (master) down.
+
 **On stream (what the Share tab shows)**
 - **Name badge:** top left (default), top right or bottom left. It shows for the first 20 s of each song, always, or never, and stays off the lyrics.
 - **DJ bar:** both decks, time left, the crossfader and what's next, along the bottom of the stream. Key **B** turns it on and off. This is how viewers see the mixer and the video together.

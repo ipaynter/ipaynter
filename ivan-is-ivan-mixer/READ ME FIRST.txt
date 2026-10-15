@@ -11,7 +11,9 @@ FIRST TIME (and every update)
 
 EVERY SHOW
   1. Click the MAD WORLD STUDIOS button on the desktop.
-  2. Click POWER ON. The SHARE tab opens - click it once.
+  2. Click POWER ON (allow the mic if Chrome asks). The SHARE tab opens -
+     click it once, and click SHARE when Chrome asks "Share this tab?"
+     (that lights up the MUSIC OUT meters on your board).
   3. In StreamYard: Share screen > Chrome Tab > "Late Night with Ivan - SHARE"
      and tick "Also share tab audio".
   4. Keep the black window open during the show.

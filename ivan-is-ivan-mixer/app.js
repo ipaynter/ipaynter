@@ -6,7 +6,7 @@
 
 // Privacy-enhanced YouTube host for the players.
 // Version of this app (keep in step with the VERSION file and CHANGELOG.md) and of the saved-data format.
-const APP_VERSION = '4.1.0';
+const APP_VERSION = '4.2.0';
 const DATA_VERSION = 2;
 
 const YT_HOST = 'https://www.youtube-nocookie.com';
@@ -345,6 +345,7 @@ if (Bus.ch) Bus.ch.onmessage = e => {
   else if (m.t === 'ovEnd') { if (S.ovOn && ovKey(S.ovOn) === m.k) hideOverlay(); }
   else if (m.t === 'error') { const p = decks[m.deck]?.player; if (p instanceof RemotePlayer) p.ev.onError({ data: m.code }); }
   else if (m.t === 'tick') {
+    if (Array.isArray(m.lv) && m.lv.length === 2) { Meters.music = m.lv; Meters.musicAt = Date.now(); }
     ['A', 'B'].forEach(id => { const p = decks[id]?.player; if (p instanceof RemotePlayer && m[id]) p.update(m[id]); });
     stepTweens(); frame(); // the viewer's messages keep the mixer on time even when this tab is in the background
   }
@@ -1718,44 +1719,131 @@ function renderStage() {
 
 /* ---------------- voice auto-duck (reads your mic level only, never records) ---------------- */
 
+// The mic: always measured once the board is powered on (for the MIC meters),
+// and used for voice auto-duck when that is ticked. It only reads levels — nothing is recorded.
 const Voice = {
-  on: false, ctx: null, stream: null, analyser: null, buf: null, lastLoud: 0, level: 0,
-  async start() {
+  on: false, ctx: null, stream: null, an: null, buf: null, lastLoud: 0, level: 0, lv: [[0, 0], [0, 0]], mono: true, err: '',
+  async start(quiet = false) {
+    if (this.on) return true;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const dev = S.cfg.micDevice || '';
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        ...(dev ? { deviceId: { exact: dev } } : {}), echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } } });
       this.ctx = new AudioContext();
+      const track = this.stream.getAudioTracks()[0];
+      this.mono = (track.getSettings().channelCount || 1) < 2;
       const src = this.ctx.createMediaStreamSource(this.stream);
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 1024;
-      this.buf = new Float32Array(this.analyser.fftSize);
-      src.connect(this.analyser);
-      this.on = true;
-      toast('Voice auto-duck ON — music dips when you talk', 'good');
+      const mk = () => { const a = this.ctx.createAnalyser(); a.fftSize = 1024; return a; };
+      if (this.mono) { this.an = [mk()]; src.connect(this.an[0]); }
+      else { const sp = this.ctx.createChannelSplitter(2); src.connect(sp); this.an = [mk(), mk()]; sp.connect(this.an[0], 0); sp.connect(this.an[1], 1); }
+      this.buf = new Float32Array(1024);
+      this.on = true; this.err = '';
+      this.name = track.label || 'mic';
+      track.addEventListener('ended', () => { this.stop(); this.err = 'unplugged'; renderMicSrc(); });
+      listMics();
+      renderMicSrc();
+      return true;
     } catch (e) {
-      $('#voiceDuck').checked = false;
-      toast('Mic not available: ' + (e.message || e.name), 'bad');
+      if (S.cfg.micDevice && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) { S.cfg.micDevice = ''; save.cfg(); return this.start(quiet); }
+      this.err = e.name === 'NotAllowedError' ? 'blocked' : 'not found';
+      if (!quiet) toast('Mic not available: ' + (e.message || e.name), 'bad');
+      $('#voiceDuck').checked = false; S.cfg.voiceDuck = false;
+      renderMicSrc();
+      return false;
     }
   },
   stop() {
     this.on = false;
     this.stream?.getTracks().forEach(t => t.stop());
-    this.ctx?.close();
-    this.ctx = this.stream = this.analyser = null;
+    try { this.ctx?.close(); } catch { /* fine */ }
+    this.ctx = this.stream = this.an = null;
+    this.lv = [[0, 0], [0, 0]];
     S.voiceTalk = false; updateDuck();
     $('#micMeter i').style.width = '0';
   },
+  measure() {
+    if (!this.on || !this.an) return;
+    this.lv = this.an.map(a => {
+      a.getFloatTimeDomainData(this.buf);
+      let pk = 0, sum = 0;
+      for (const v of this.buf) { const x = v < 0 ? -v : v; if (x > pk) pk = x; sum += v * v; }
+      return [pk, Math.sqrt(sum / this.buf.length)];
+    });
+    if (this.mono) this.lv[1] = this.lv[0];
+    const rms = Math.max(this.lv[0][1], this.lv[1][1]);
+    this.level = clamp((20 * Math.log10(rms + 1e-9) + 60) / 60 * 100, 0, 100); // -60 dB..0 dB → 0..100
+  },
   tick() {
-    if (!this.on || !this.analyser) return;
-    this.analyser.getFloatTimeDomainData(this.buf);
-    let sum = 0;
-    for (const v of this.buf) sum += v * v;
-    const db = 20 * Math.log10(Math.sqrt(sum / this.buf.length) + 1e-9);
-    this.level = clamp((db + 60) / 60 * 100, 0, 100); // -60 dB..0 dB → 0..100
+    if (!this.on) return;
+    this.measure();
     $('#micMeter i').style.width = this.level + '%';
+    if (!S.cfg.voiceDuck) { if (S.voiceTalk) { S.voiceTalk = false; updateDuck(); } return; }
     const now = Date.now();
     if (this.level >= S.cfg.voiceThresh) this.lastLoud = now;
     const talking = now - this.lastLoud < 1200;
     if (talking !== S.voiceTalk) { S.voiceTalk = talking; updateDuck(); }
+  }
+};
+
+async function listMics() {
+  const sel = $('#micDevice'); if (!sel || !navigator.mediaDevices?.enumerateDevices) return;
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
+  sel.innerHTML = '<option value="">Windows default mic</option>' + devs.map(d => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Microphone')}</option>`).join('');
+  sel.value = devs.some(d => d.deviceId === S.cfg.micDevice) ? S.cfg.micDevice : '';
+}
+function renderMicSrc() {
+  const el = $('#lvMicSrc'); if (!el) return;
+  el.textContent = Voice.on ? (Voice.mono ? 'mono' : 'stereo') : Voice.err ? `off (${Voice.err}) — click` : 'off — click';
+  el.title = Voice.on ? `Measuring: ${Voice.name}. Pick another input under "more".` : 'Click to turn the mic meter on';
+  el.classList.toggle('bad', !Voice.on);
+}
+
+/* ---------------- LED level meters: MUSIC OUT (from the Share tab) and MIC ---------------- */
+
+const LED_N = 24, LED_FLOOR = -42;   // 24 lights from -42 dB to 0 dB
+const Meters = {
+  music: null, musicAt: 0,
+  rows: {}, disp: {}, hold: {},
+  init() {
+    for (const id of ['ML', 'MR', 'VL', 'VR']) {
+      const el = $('#led' + id); if (!el) continue;
+      el.innerHTML = Array.from({ length: LED_N }, (_, i) => `<i class="${i >= LED_N - 3 ? 'r' : i >= LED_N - 8 ? 'y' : 'g'}"></i>`).join('');
+      this.rows[id] = [...el.children]; this.disp[id] = 0; this.hold[id] = { n: -1, at: 0 };
+    }
+    const loop = () => { this.draw(); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  },
+  // peak 0..1 → number of lights
+  lights(pk) { if (!(pk > 0)) return 0; const db = 20 * Math.log10(pk); return clamp(Math.ceil((db - LED_FLOOR) / -LED_FLOOR * LED_N), 0, LED_N); },
+  set(id, pk) {
+    const now = performance.now(), rows = this.rows[id]; if (!rows) return;
+    const target = this.lights(pk);
+    const shown = this.disp[id] = target >= this.disp[id] ? target : Math.max(target, this.disp[id] - 0.6); // fast up, smooth fall
+    const h = this.hold[id];
+    if (target >= h.n || now - h.at > 1500) { h.n = target; h.at = now; }
+    const n = Math.round(shown);
+    for (let i = 0; i < LED_N; i++) rows[i].classList.toggle('on', i < n || (i === h.n - 1 && h.n > 0));
+  },
+  draw() {
+    if (!decks.A || S.shutting) return;
+    const real = this.music && Date.now() - this.musicAt < 1000;
+    let L = 0, R = 0;
+    if (real) { L = this.music[0][0]; R = this.music[1][0]; }
+    else { // no reading from the Share tab: an estimate from what is playing and the faders
+      const g = Math.max(decks.A.isPlaying() ? decks.A.out : 0, decks.B.isPlaying() ? decks.B.out : 0);
+      L = R = g * 0.5;
+    }
+    this.set('ML', L); this.set('MR', R);
+    const src = $('#lvMusicSrc');
+    const want = real ? 'live' : 'estimate';
+    if (src.textContent !== want) {
+      src.textContent = want; src.classList.toggle('est', !real);
+      src.title = real ? 'The real sound leaving the Share tab — what StreamYard picks up'
+        : 'Estimated. For the real level, go to the Share tab and press M, then click "Share" when Chrome asks.';
+    }
+    $('#levels').classList.toggle('clip', real && Math.max(L, R) >= 0.99);
+    Voice.measure();
+    this.set('VL', Voice.on ? Voice.lv[0][0] : 0); this.set('VR', Voice.on ? Voice.lv[1][0] : 0);
   }
 };
 
@@ -2849,7 +2937,14 @@ function initMixerUI() {
     S.duckTarget = null; updateDuck();
   };
   $('#voiceThresh').oninput = e => { S.cfg.voiceThresh = +e.target.value; $('#micThreshMark').style.left = S.cfg.voiceThresh + '%'; save.cfg(); };
-  $('#voiceDuck').onchange = e => (e.target.checked ? Voice.start() : Voice.stop());
+  $('#voiceDuck').checked = !!S.cfg.voiceDuck;
+  $('#voiceDuck').onchange = async e => {
+    S.cfg.voiceDuck = e.target.checked; save.cfg();
+    if (e.target.checked && !Voice.on) await Voice.start();
+    if (S.cfg.voiceDuck && Voice.on) toast('Voice auto-duck ON — music dips when you talk', 'good');
+  };
+  $('#micDevice').onchange = async e => { S.cfg.micDevice = e.target.value; save.cfg(); Voice.stop(); await Voice.start(); };
+  $('#lvMicSrc').onclick = () => { if (!Voice.on) Voice.start(); };
 }
 
 /* ---------------- tabs ---------------- */
@@ -2948,6 +3043,7 @@ function boot() {
   initMixerUI(); initQueueUI(); initOverlayUI(); initLibraryUI(); initCreatorsUI(); initImportUI(); initPlaylistsUI(); initHistoryUI(); initSettingsUI();
   $$('.tabs button').forEach(b => { b.onclick = () => openTab(b.dataset.tab, true); });
   renderEverything(); renderVersion(); syncXfUI(); applyVolumes();
+  Meters.init(); renderMicSrc();
   Remote.init().then(() => setTimeout(() => Creators.checkAll(false), 4000));
 
   // Look for new uploads every 30 minutes, but never while on air.
@@ -2956,6 +3052,7 @@ function boot() {
   if (location.protocol === 'file:') $('#fileWarn').classList.remove('hidden');
   $('#power').onclick = () => {
     $('#splash').classList.add('hidden');
+    Voice.start(true);   // MIC meters (this click lets Chrome ask for the mic once)
     if (S.cfg.viewerTab) openViewer(); // opens the Share tab (this click lets Chrome open it)
     if (!S.library.length && !S.creators.length) $('#help').classList.remove('hidden');
   };
